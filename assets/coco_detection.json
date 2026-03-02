@@ -1,0 +1,52 @@
+{
+    "info": {
+        "year": 2026,
+        "version": "3.3.10",
+        "description": "COCO Label Conversion",
+        "contributor": "CVHub",
+        "url": "https://github.com/CVHub520/X-AnyLabeling",
+        "date_created": "2026-03-02"
+    },
+    "licenses": [
+        {
+            "id": 1,
+            "url": "https://www.gnu.org/licenses/gpl-3.0.html",
+            "name": "GNU GENERAL PUBLIC LICENSE Version 3"
+        }
+    ],
+    "categories": [
+        {
+            "id": 1,
+            "name": "esc",
+            "supercategory": ""
+        }
+    ],
+    "images": [
+        {
+            "license": 0,
+            "url": null,
+            "file_name": "images/0.png",
+            "height": 1440,
+            "width": 2560,
+            "date_captured": null,
+            "id": 0
+        }
+    ],
+    "annotations": [
+        {
+            "id": 0,
+            "image_id": 0,
+            "category_id": 1,
+            "bbox": [
+                2453,
+                106,
+                45,
+                27
+            ],
+            "area": 1212.817739318554,
+            "iscrowd": 0,
+            "ignore": 0,
+            "segmentation": []
+        }
+    ]
+}

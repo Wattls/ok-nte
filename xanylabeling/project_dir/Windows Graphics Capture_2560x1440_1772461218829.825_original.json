@@ -1,0 +1,39 @@
+{
+  "version": "3.3.10",
+  "flags": {},
+  "shapes": [
+    {
+      "label": "esc",
+      "score": null,
+      "points": [
+        [
+          2453.2558139534885,
+          106.04651162790704
+        ],
+        [
+          2498.604651162791,
+          106.04651162790704
+        ],
+        [
+          2498.604651162791,
+          132.79069767441865
+        ],
+        [
+          2453.2558139534885,
+          132.79069767441865
+        ]
+      ],
+      "group_id": null,
+      "description": "",
+      "difficult": false,
+      "shape_type": "rectangle",
+      "flags": {},
+      "attributes": {},
+      "kie_linking": []
+    }
+  ],
+  "imagePath": "Windows Graphics Capture_2560x1440_1772461218829.825_original.png",
+  "imageData": null,
+  "imageHeight": 1440,
+  "imageWidth": 2560
+}
