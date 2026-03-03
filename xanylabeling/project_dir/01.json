@@ -1,0 +1,214 @@
+{
+  "version": "3.3.10",
+  "flags": {},
+  "shapes": [
+    {
+      "kie_linking": [],
+      "label": "box_skill",
+      "score": null,
+      "points": [
+        [
+          3310.5152979066015,
+          1897.7777777777778
+        ],
+        [
+          3403.2689210950075,
+          1897.7777777777778
+        ],
+        [
+          3403.2689210950075,
+          1984.7342995169083
+        ],
+        [
+          3310.5152979066015,
+          1984.7342995169083
+        ]
+      ],
+      "group_id": null,
+      "description": "",
+      "difficult": false,
+      "shape_type": "rectangle",
+      "flags": {},
+      "attributes": {}
+    },
+    {
+      "kie_linking": [],
+      "label": "box_ultimate",
+      "score": null,
+      "points": [
+        [
+          3575.813204508856,
+          1894.0740740740744
+        ],
+        [
+          3668.566827697262,
+          1894.0740740740744
+        ],
+        [
+          3668.566827697262,
+          1981.0305958132049
+        ],
+        [
+          3575.813204508856,
+          1981.0305958132049
+        ]
+      ],
+      "group_id": null,
+      "description": "",
+      "difficult": false,
+      "shape_type": "rectangle",
+      "flags": {},
+      "attributes": {}
+    },
+    {
+      "kie_linking": [],
+      "label": "char_1_text",
+      "score": null,
+      "points": [
+        [
+          3747.2563176895305,
+          483.29043002534485
+        ],
+        [
+          3773.971119133574,
+          483.29043002534485
+        ],
+        [
+          3773.971119133574,
+          515.884476534296
+        ],
+        [
+          3747.2563176895305,
+          515.884476534296
+        ]
+      ],
+      "group_id": null,
+      "description": "",
+      "difficult": false,
+      "shape_type": "rectangle",
+      "flags": {},
+      "attributes": {}
+    },
+    {
+      "kie_linking": [],
+      "label": "box_char_2",
+      "score": null,
+      "points": [
+        [
+          3573.0,
+          709.9272179155901
+        ],
+        [
+          3640.025839793281,
+          709.9272179155901
+        ],
+        [
+          3640.025839793281,
+          790.0
+        ],
+        [
+          3573.0,
+          790.0
+        ]
+      ],
+      "group_id": null,
+      "description": "",
+      "difficult": false,
+      "shape_type": "rectangle",
+      "flags": {},
+      "attributes": {}
+    },
+    {
+      "kie_linking": [],
+      "label": "box_char_4",
+      "score": null,
+      "points": [
+        [
+          3573.0,
+          1237.9788975021534
+        ],
+        [
+          3638.162790697674,
+          1237.9788975021534
+        ],
+        [
+          3638.162790697674,
+          1317.0
+        ],
+        [
+          3573.0,
+          1317.0
+        ]
+      ],
+      "group_id": null,
+      "description": "",
+      "difficult": false,
+      "shape_type": "rectangle",
+      "flags": {},
+      "attributes": {}
+    },
+    {
+      "kie_linking": [],
+      "label": "box_char_1",
+      "score": null,
+      "points": [
+        [
+          3573.0,
+          446.75322997416026
+        ],
+        [
+          3639.1111111111104,
+          446.75322997416026
+        ],
+        [
+          3639.1111111111104,
+          526.0
+        ],
+        [
+          3573.0,
+          526.0
+        ]
+      ],
+      "group_id": null,
+      "description": "",
+      "difficult": false,
+      "shape_type": "rectangle",
+      "flags": {},
+      "attributes": {}
+    },
+    {
+      "kie_linking": [],
+      "label": "box_char_3",
+      "score": null,
+      "points": [
+        [
+          3573.0,
+          974.9642549526271
+        ],
+        [
+          3639.4220499569333,
+          974.9642549526271
+        ],
+        [
+          3639.4220499569333,
+          1052.0
+        ],
+        [
+          3573.0,
+          1052.0
+        ]
+      ],
+      "group_id": null,
+      "description": "",
+      "difficult": false,
+      "shape_type": "rectangle",
+      "flags": {},
+      "attributes": {}
+    }
+  ],
+  "imagePath": "01.png",
+  "imageData": null,
+  "imageHeight": 2160,
+  "imageWidth": 3840,
+  "description": ""
+}
