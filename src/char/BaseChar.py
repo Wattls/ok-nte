@@ -137,9 +137,8 @@ class BaseChar:
             self.continues_normal_attack(1.2, click_skill_if_ready_and_return=True)
         self.click_ultimate()
         if self.click_skill()[0]:
-            return self.switch_next_char()
+            return
         self.continues_normal_attack(0.3)
-        self.switch_next_char()
 
     def do_fast_perform(self):
         """执行角色的快速战斗行动 (通常在需要快速切换时)。"""

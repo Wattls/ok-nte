@@ -39,6 +39,7 @@ class AutoCombatTask(BaseCombatTask, TriggerTask):
             ret = True
             try:
                 self.get_current_char().perform()
+                self.get_current_char().switch_next_char()
             except CharDeadException:
                 self.log_error('Characters dead', notify=True)
                 break
