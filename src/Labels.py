@@ -13,3 +13,4 @@ class Labels(str, Enum):
     char_2_text = 'char_2_text'
     char_3_text = 'char_3_text'
     char_4_text = 'char_4_text'
+    mini_map_arrow = 'mini_map_arrow'

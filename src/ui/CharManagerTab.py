@@ -580,10 +580,14 @@ class CharManagerTab(CustomTab):
         try:
             from src.char.custom.CustomChar import CustomChar
             docs = CustomChar.get_available_commands()
-            text = "可以在出招表中输入以下指令 (以逗号分隔):\n\n"
-            translatable_text = "可以在出招表中输入以下指令 (以逗号分隔):\n\n"
+            text = "可以在出招表中输入以下指令 (以英文逗号 [ , ] 分隔):\n\n"
+            translatable_text = text
             empty_text = "无"
             protected_literals = {}
+            delimiter_literal = "[ , ]"
+            delimiter_token = "__COMMA_SEPARATOR_LITERAL__"
+            protected_literals[delimiter_token] = delimiter_literal
+            translatable_text = translatable_text.replace(delimiter_literal, delimiter_token)
             for index, cmd in enumerate(docs):
                 cmd_name = str(cmd.name)
                 cmd_example = str(cmd.example or cmd_name)

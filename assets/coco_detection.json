@@ -5,7 +5,7 @@
         "description": "COCO Label Conversion",
         "contributor": "CVHub",
         "url": "https://github.com/CVHub520/X-AnyLabeling",
-        "date_created": "2026-03-19"
+        "date_created": "2026-03-26"
     },
     "licenses": [
         {
@@ -69,6 +69,11 @@
             "id": 11,
             "name": "char_4_text",
             "supercategory": ""
+        },
+        {
+            "id": 12,
+            "name": "mini_map_arrow",
+            "supercategory": ""
         }
     ],
     "images": [
@@ -97,12 +102,12 @@
             "image_id": 0,
             "category_id": 6,
             "bbox": [
-                3311,
-                1898,
-                93,
-                87
+                3299,
+                1918,
+                103,
+                54
             ],
-            "area": 8065.532451165743,
+            "area": 5498.596650067864,
             "iscrowd": 0,
             "ignore": 0,
             "segmentation": []
@@ -112,12 +117,12 @@
             "image_id": 0,
             "category_id": 7,
             "bbox": [
-                3576,
-                1894,
-                93,
-                87
+                3575,
+                1917,
+                98,
+                54
             ],
-            "area": 8065.532451165743,
+            "area": 5261.06113986921,
             "iscrowd": 0,
             "ignore": 0,
             "segmentation": []
@@ -213,7 +218,22 @@
             "segmentation": []
         },
         {
-            "id": 16,
+            "id": 8,
+            "image_id": 0,
+            "category_id": 12,
+            "bbox": [
+                290,
+                241,
+                49,
+                58
+            ],
+            "area": 2802.306873592237,
+            "iscrowd": 0,
+            "ignore": 0,
+            "segmentation": []
+        },
+        {
+            "id": 18,
             "image_id": 2,
             "category_id": 9,
             "bbox": [
@@ -228,7 +248,7 @@
             "segmentation": []
         },
         {
-            "id": 17,
+            "id": 19,
             "image_id": 2,
             "category_id": 10,
             "bbox": [
@@ -243,7 +263,7 @@
             "segmentation": []
         },
         {
-            "id": 18,
+            "id": 20,
             "image_id": 2,
             "category_id": 11,
             "bbox": [

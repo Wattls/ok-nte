@@ -19,8 +19,8 @@ class TestHealthBar(TaskTestCase):
         result = self.task.has_health_bar()
         self.logger.info(f'enemy_health: {result}')
         self.assertEqual(result, True)
-        time.sleep(1)
-        self.task.screenshot('enemy_health', show_box=True)
+        # time.sleep(1)
+        # self.task.screenshot('enemy_health', show_box=True)
 
     def test_boss_health(self):
         # Create a BattleReport object
@@ -28,8 +28,8 @@ class TestHealthBar(TaskTestCase):
         result = self.task.has_health_bar()
         self.logger.info(f'test boss_health: {result}')
         self.assertEqual(result, True)
-        time.sleep(1)
-        self.task.screenshot('boss_health', show_box=True)
+        # time.sleep(1)
+        # self.task.screenshot('boss_health', show_box=True)
 
     def test_boss_lv_text(self):
         self.set_image('tests/images/05.png')

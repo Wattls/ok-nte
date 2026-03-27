@@ -7,6 +7,8 @@ import numpy as np  # noqa
 
 from ok import Config, Logger, Box  # noqa
 from src import text_white_color  # noqa
+from src.Labels import Labels
+from src.tasks.BaseNTETask import isolate_white_text_to_black
 
 from typing import TYPE_CHECKING
 
@@ -128,16 +130,15 @@ class BaseChar:
         """
         self.click(interval=interval)
 
-    def click(self, x: Union[int, "Box", List["Box"]] = -1, y: int = -1, move_back: bool = False,
-              name: Optional[str] = None, interval: float = -1, move: bool = True, down_time: float = 0.01,
-              after_sleep: float = 0, key: str = 'left') -> bool:
+    @property
+    def click(self):
         """执行一次点击操作 (代理到 task.click)。"""
-        self.task.click(x=x, y=y, move_back=move_back, name=name, interval=interval, move=move, down_time=down_time, after_sleep=after_sleep, key=key)
+        return self.task.click
 
-    def send_key(self, key: Union[str, int], down_time: float = 0.02, interval: float = -1,
-                 after_sleep: float = 0) -> bool:
-        """执行一次发送按键操作 (代理到 task.send_key)。"""
-        self.task.send_key(key, down_time=down_time, interval=interval, after_sleep=after_sleep)
+    @property
+    def send_key(self):
+        """发送按键 (代理到 task.send_key)。"""
+        return self.task.send_key
 
     def do_perform(self):
         """执行角色的标准战斗行动。"""
@@ -244,7 +245,7 @@ class BaseChar:
                 self.task.in_ultimate = False
                 break
             if has_animation:
-                if not self.task.in_team()[0]:
+                if not self.task.in_world():
                     self.task.in_ultimate = True
                     animation_start = time.time()
                     the_time_out = SKILL_TIME_OUT
@@ -335,13 +336,15 @@ class BaseChar:
         """
         if not self.task.use_ultimate:
             return False
-        self.logger.debug('click_ultimate start')
+        self.logger.debug("click_ultimate start")
         start = time.time()
         last_click = 0
         clicked = False
         if not self.task.in_ultimate:
-            while self.ultimate_available():  # clicked and still in team wait for animation
-                self.logger.debug('click_ultimate ultimate_available click')
+            while (
+                self.ultimate_available()
+            ):
+                self.logger.debug("click_ultimate ultimate_available click")
                 if send_click:
                     self.click(interval=0.1)
                 now = time.time()
@@ -352,28 +355,36 @@ class BaseChar:
                     last_click = now
                 if time.time() - start > SKILL_TIME_OUT:
                     self.alert_skill_failed()
-                    self.task.raise_not_in_combat('too long clicking a ultimate')
+                    self.task.raise_not_in_combat("too long clicking a ultimate")
                 self.task.next_frame()
             if clicked:
-                if self.task.wait_until(lambda: not self.task.in_team()[0], time_out=0.4,
-                                        post_action=self.click_with_interval):
+                if self.task.wait_until(
+                    lambda: not self.task.in_world(),
+                    time_out=0.4,
+                    post_action=self.click_with_interval,
+                ):
                     self.task.in_ultimate = True
-                    self.logger.debug('not in_team successfully casted ultimate')
+                    self.logger.debug("not in_team successfully casted ultimate")
                 else:
                     self.task.in_ultimate = False
-                    self.logger.error('clicked ultimate but no effect')
+                    self.logger.error("clicked ultimate but no effect")
                     return False
             else:
                 start = time.time()
-                while not self.has_cd('ultimate') and time.time() - start < wait_if_cd_ready:
+                while (
+                    not self.has_cd("ultimate")
+                    and time.time() - start < wait_if_cd_ready
+                ):
                     self.send_ultimate_key(after_sleep=0.05)
-                    if self.task.wait_until(lambda: not self.task.in_team()[0], time_out=0.1):
+                    if self.task.wait_until(
+                        lambda: not self.task.in_world(), time_out=0.1
+                    ):
                         self.task.in_ultimate = True
-                        self.logger.debug('not in_team successfully casted ultimate')
+                        self.logger.debug("not in_team successfully casted ultimate")
                 if not self.task.in_ultimate:
                     return False
         start = time.time()
-        while not self.task.in_team()[0]:
+        while not self.task.in_world():
             self.task.in_ultimate = True
             if not clicked:
                 clicked = True
@@ -381,14 +392,32 @@ class BaseChar:
                 self.click(interval=0.1)
             if time.time() - start > 7:
                 self.task.in_ultimate = False
-                self.task.raise_not_in_combat('too long a ultimate, the boss was killed by the ultimate')
+                self.task.raise_not_in_combat(
+                    "too long a ultimate, the boss was killed by the ultimate"
+                )
             self.task.next_frame()
-        duration = time.time() - start
+
+        box_ultimate = self.task.get_box_by_name(Labels.box_ultimate)
+        snapshot = box_ultimate.crop_frame(self.task.frame)
+        processed_snapshot = isolate_white_text_to_black(snapshot)
+        self.task.wait_until(
+            lambda: (
+                not self.task.find_one(
+                    template=processed_snapshot,
+                    box=box_ultimate,
+                    frame_processor=isolate_white_text_to_black,
+                    threshold=0.7,
+                )
+            ),
+            time_out=10,
+            post_action=self.click_with_interval,
+        )
+        duration = time.time() - start - 0.1
         self.add_freeze_duration(start, duration)
         self.task.in_ultimate = False
         self._ultimate_available = False
         if clicked:
-            self.logger.info(f'click_ultimate end {duration}')
+            self.logger.info(f"click_ultimate end {duration}")
         return clicked
 
     def on_combat_end(self, chars):
@@ -399,13 +428,15 @@ class BaseChar:
         """
         pass
 
-    def add_freeze_duration(self, start, duration=-1.0, freeze_time=0.1):
+    @property
+    def add_freeze_duration(self):
         """添加冻结持续时间 (代理到 task.add_freeze_duration)。"""
-        self.task.add_freeze_duration(start, duration, freeze_time)
+        return self.task.add_freeze_duration
 
-    def time_elapsed_accounting_for_freeze(self, start, intro_motion_freeze=False):
+    @property
+    def time_elapsed_accounting_for_freeze(self):
         """计算扣除冻结时间后经过的时间 (代理到 task.time_elapsed_accounting_for_freeze)。"""
-        return self.task.time_elapsed_accounting_for_freeze(start, intro_motion_freeze)
+        return self.task.time_elapsed_accounting_for_freeze
 
     def get_ultimate_key(self):
         """获取终结技按键 (代理到 task.get_ultimate_key)。"""
@@ -505,8 +536,8 @@ class BaseChar:
             self.logger.debug(f'wait_switch_cd {since_last_switch}')
             self.continues_normal_attack(1 - since_last_switch)
 
-    def continues_normal_attack(self, duration, interval=0.1, after_sleep=0, click_skill_if_ready_and_return=False,
-                                until_cycle_full=False):
+    def continues_normal_attack(self, duration: float, interval: float=0.1, after_sleep: float=0, click_skill_if_ready_and_return: bool=False,
+                                until_cycle_full: bool=False):
         """持续进行普通攻击一段时间。
 
         Args:
@@ -519,8 +550,8 @@ class BaseChar:
         while time.time() - start < duration:
             if click_skill_if_ready_and_return and self.skill_available():
                 return self.click_skill()
-            if until_cycle_full and self.is_cycle_full():
-                return
+            # if until_cycle_full and self.is_cycle_full():
+            #     return
             self.click()
             self.sleep(interval)
         self.sleep(after_sleep)

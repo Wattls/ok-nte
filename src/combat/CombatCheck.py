@@ -75,7 +75,11 @@ class CombatCheck(BaseNTETask):
         return self.has_health_bar() or self.is_boss()
 
     def is_boss(self):
-        return bool(self.find_one(Labels.boss_lv_text))
+        def filter(image):
+            return binarize_bgr_by_brightness(image, threshold=180)
+        box = self.box_of_screen(0.3582, 0.0215, 0.4508, 0.0569)
+        is_boss = self.find_one(Labels.boss_lv_text, box=box, frame_processor=filter)
+        return bool(is_boss)
     
     def test_ocr_lv(self, boxes):
         lv_text_boxes = []

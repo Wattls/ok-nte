@@ -5,6 +5,7 @@ from typing_extensions import Any
 
 from src.char.BaseChar import BaseChar
 from src.char.Zero import Zero
+from src.char.Mint import Mint
 
 if TYPE_CHECKING:
     from src.combat.BaseCombatTask import BaseCombatTask
@@ -14,6 +15,7 @@ if TYPE_CHECKING:
 char_dict: dict[str, dict[str, Any]] = {
     "char_default": {'cls': BaseChar},
     "char_zero": {'cls': Zero, 'cn_name': '零'},
+    "char_mint": {'cls': Mint, 'cn_name': '薄荷'},
 }
 
 char_names = char_dict.keys()

@@ -14,14 +14,24 @@ darkdetect==0.8.0
     # via pyside6-fluent-widgets
 idna==3.11
     # via requests
+imageio==2.37.3
+    # via scikit-image
+lazy-loader==0.5
+    # via scikit-image
 mouse==0.7.1
     # via ok-script
+networkx==3.6.1
+    # via scikit-image
 numpy==2.4.3
     # via
+    #   imageio
     #   opencv-python
     #   openvino
+    #   scikit-image
+    #   scipy
     #   shapely
-ok-script==1.0.79
+    #   tifffile
+ok-script==1.0.87
     # via -r requirements.in
 onnxocr-ppocrv5==0.0.14
     # via -r requirements.in
@@ -31,8 +41,15 @@ openvino==2026.0.0
     # via -r requirements.in
 openvino-telemetry==2025.2.0
     # via openvino
+packaging==26.0
+    # via
+    #   lazy-loader
+    #   scikit-image
 pillow==12.1.1
-    # via onnxocr-ppocrv5
+    # via
+    #   imageio
+    #   onnxocr-ppocrv5
+    #   scikit-image
 psutil==7.2.2
     # via
     #   ok-script
@@ -45,17 +62,17 @@ pyclipper==1.4.0
     # via onnxocr-ppocrv5
 pydirectinput==1.0.4
     # via ok-script
-pyside6==6.10.2
+pyside6==6.11.0
     # via pyside6-fluent-widgets
-pyside6-addons==6.10.2
+pyside6-addons==6.11.0
     # via pyside6
-pyside6-essentials==6.10.2
+pyside6-essentials==6.11.0
     # via
     #   pyside6
     #   pyside6-addons
 pyside6-fluent-widgets==1.8.3
     # via ok-script
-pysidesix-frameless-window==0.8.0
+pysidesix-frameless-window==0.8.1
     # via pyside6-fluent-widgets
 pywin32==311
     # via
@@ -63,13 +80,19 @@ pywin32==311
     #   pysidesix-frameless-window
 requests==2.32.5
     # via ok-script
+scikit-image==0.26.0
+    # via -r requirements.in
+scipy==1.17.1
+    # via scikit-image
 shapely==2.1.2
     # via onnxocr-ppocrv5
-shiboken6==6.10.2
+shiboken6==6.11.0
     # via
     #   pyside6
     #   pyside6-addons
     #   pyside6-essentials
+tifffile==2026.3.3
+    # via scikit-image
 typing-extensions==4.15.0
     # via ok-script
 urllib3==2.6.3

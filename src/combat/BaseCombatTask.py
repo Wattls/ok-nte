@@ -4,6 +4,7 @@ from decimal import Decimal, ROUND_UP, ROUND_DOWN
 
 import cv2
 import numpy as np
+from skimage.metrics import structural_similarity as ssim
 
 from ok import Logger, Config
 from ok import color_range_to_bound
@@ -56,6 +57,7 @@ class BaseCombatTask(CombatCheck):
         self.add_text_fix({'Ｅ': 'e'})
         self.use_ultimate = True
         self.vibrate_chars_index: list[int] = []
+        self.chars_slot_mat = [None, None, None, None]
 
     @property
     def team_size(self):
@@ -75,6 +77,22 @@ class BaseCombatTask(CombatCheck):
         current_index = self.get_current_char().index
         next_index = (current_index + 1) % len(self.chars)
         return next_index
+    
+    def get_longest_idle_char_index(self) -> int:
+        """获取最久没有登场角色的索引。
+
+        Returns:
+            int: 角色的索引。如果没有角色，返回 -1。
+        """
+        if not self.chars:
+            return -1
+        min_time = float('inf')
+        min_index = -1
+        for char in self.chars:
+            if char.last_switch_time < min_time:
+                min_time = char.last_switch_time
+                min_index = char.index
+        return min_index
 
     def add_freeze_duration(self, start, duration=-1.0, freeze_time=0.1):
         """添加冻结持续时间。用于精确计算技能冷却等。
@@ -212,13 +230,13 @@ class BaseCombatTask(CombatCheck):
         self.wait_in_team_and_world(time_out=10, raise_if_not_found=False)
 
     def _decide_switch_to(self, current_char: 'BaseChar', free_intro=False):
-        has_intro = free_intro or current_char.is_cycle_full()
+        has_intro = free_intro #or current_char.is_cycle_full()
         switch_to = current_char
         max_priority = Priority.MIN
 
-        vibrate_set = set(self.vibrate_chars_index) if has_intro and self.vibrate_chars_index else None
-        vibrate_switch_to = None
-        vibrate_priority = Priority.MIN
+        # vibrate_set = set(self.vibrate_chars_index) if has_intro and self.vibrate_chars_index else None
+        # vibrate_switch_to = None
+        # vibrate_priority = Priority.MIN
 
         for char in self.chars:
             if char is None:
@@ -236,16 +254,16 @@ class BaseCombatTask(CombatCheck):
                 max_priority = priority
                 switch_to = char
 
-            if vibrate_set and char != current_char and char.index in vibrate_set:
-                if (vibrate_switch_to is None
-                        or priority > vibrate_priority
-                        or (priority == vibrate_priority and char.last_perform < vibrate_switch_to.last_perform)):
-                    vibrate_priority = priority
-                    vibrate_switch_to = char
+            # if vibrate_set and char != current_char and char.index in vibrate_set:
+            #     if (vibrate_switch_to is None
+            #             or priority > vibrate_priority
+            #             or (priority == vibrate_priority and char.last_perform < vibrate_switch_to.last_perform)):
+            #         vibrate_priority = priority
+            #         vibrate_switch_to = char
 
         # 有协奏时优先在共振角色子集中竞争；若都在切换CD则回退全体竞争结果。
-        if vibrate_switch_to is not None and vibrate_priority > Priority.SWITCH_CD:
-            switch_to = vibrate_switch_to
+        # if vibrate_switch_to is not None and vibrate_priority > Priority.SWITCH_CD:
+        #     switch_to = vibrate_switch_to
 
         return switch_to, has_intro
 
@@ -271,7 +289,7 @@ class BaseCombatTask(CombatCheck):
 
             switch_to_self_count += 1
             if switch_to_self_count > 5:
-                switch_to = safe_get(self.chars, self.get_next_char_index())
+                switch_to = safe_get(self.chars, self.get_longest_idle_char_index())
                 if switch_to is not None and switch_to != current_char:
                     logger.warning(f'switch_next_char forced to next char {switch_to} after repeated self selection')
                     break
@@ -286,39 +304,39 @@ class BaseCombatTask(CombatCheck):
         switch_to.has_intro = has_intro
         logger.info(f'switch_next_char {current_char} -> {switch_to} has_intro {switch_to.has_intro}')
         
-        # if self.debug:
-        #     self.screenshot(f'switch_next_char_{current_con}')
-        
         last_click_time = 0.0
         last_decide_time = 0.0
         start_time = time.time()
+        self.has_char_slot_changed(switch_to.index, reset_char_slot=True)
 
         while True:
             self.check_combat()
             current_time = time.time()
 
-            _, current_index, _ = self.in_team()
-            if current_index == current_char.index and not has_intro and current_time - last_decide_time > 0.12:
-                last_decide_time = current_time
-                new_switch_to, new_has_intro = self._decide_switch_to(current_char, free_intro)
-                if new_has_intro and new_switch_to != current_char:
-                    switch_to = new_switch_to
-                    has_intro = new_has_intro  # 更新外层状态用于后续逻辑
-                    switch_to.has_intro = True
-                    logger.info(f'switch_next_char updated target to {switch_to} has_intro {switch_to.has_intro}')
+            is_char_switch = self.has_char_slot_changed(switch_to.index)
 
-            if current_time - last_click_time > 0.1:
-                self.send_key(switch_to.index + 1)
-                self.sleep(0.001)
-                self.log_debug('switch not detected, send click')
-                self.click()
-                self.sleep(0.001)
-                last_click_time = current_time
+            if not is_char_switch:
+                self.click(interval=0.2)
+            else:
+                self.in_ultimate = False
+                current_char.switch_out()
+                switch_to.is_current_char = True
+                if has_intro:
+                    current_char.last_outro_time = time.time()
+                break
 
-            in_team, current_index, _ = self.in_team()
+            # if not is_char_switch and not has_intro and current_time - last_decide_time > 0.12:
+            #     last_decide_time = current_time
+            #     if self.is_cycle_full():
+            #         new_switch_to, new_has_intro = self._decide_switch_to(current_char, free_intro)
+            #         if new_has_intro and new_switch_to != current_char:
+            #             switch_to = new_switch_to
+            #             has_intro = new_has_intro
+            #             switch_to.has_intro = True
+            #             logger.info(f'switch_next_char updated target to {switch_to} has_intro {switch_to.has_intro}')
 
-            if not in_team:
-                logger.info(f'not in team while switching chars_{current_char}_to_{switch_to} {current_time - start_time}')
+            if not self.in_world():
+                logger.info(f'not in world while switching chars_{current_char}_to_{switch_to} {current_time - start_time}')
                 # if self.debug:
                 #     self.screenshot(f'not in team while switching chars_{current_char}_to_{switch_to} {now - start}')
                 # confirm = self.wait_feature('revive_confirm_hcenter_vcenter', threshold=0.8, time_out=2)
@@ -331,13 +349,10 @@ class BaseCombatTask(CombatCheck):
                 self.next_frame()
                 continue
 
-            if current_index == switch_to.index:
-                self.in_ultimate = False
-                current_char.switch_out()
-                switch_to.is_current_char = True
-                if has_intro:
-                    current_char.last_outro_time = time.time()
-                break
+            if current_time - last_click_time > 0.1:
+                self.send_key(switch_to.index + 1)
+                self.sleep(0.001)
+                last_click_time = current_time
             
             if current_time - start_time > 10:
                 if self.debug:
@@ -409,7 +424,6 @@ class BaseCombatTask(CombatCheck):
                 return char
         if raise_exception and not self.in_team()[0]:
             self.raise_not_in_combat('can find current char!!')
-        # self.load_chars()
         return None
 
     def combat_end(self):
@@ -623,6 +637,29 @@ class BaseCombatTask(CombatCheck):
                 chars.append(i-1)
         self.vibrate_chars_index = chars
         return ret
+    
+    def has_char_slot_changed(self, index: int, reset_char_slot: bool=False) -> bool:
+        def check_size(img1, img2):
+            h1, w1 = img1.shape[:2]
+            h2, w2 = img2.shape[:2]
+
+            if (h1, w1) != (h2, w2):
+                img2 = cv2.resize(img2, (w1, h1), interpolation=cv2.INTER_AREA)
+            return img1, img2
+
+        confidence = 1
+        frame = self.frame
+        feature_name = f"char_{index + 1}_text"
+        box = self.get_box_by_name(feature_name)
+        current_mat = box.crop_frame(frame)
+        if reset_char_slot:
+            self.chars_slot_mat[index] = None
+        if self.chars_slot_mat[index] is not None:
+            img1, img2 = check_size(self.chars_slot_mat[index], current_mat)
+            confidence = ssim(img1, img2, channel_axis=-1)
+            self.log_debug(f"compare_char_slot: confidence {confidence}")
+        self.chars_slot_mat[index] = current_mat
+        return confidence < 0.7
 
 
 white_color = {  # 用于检测UI元素可用状态的白色颜色范围。

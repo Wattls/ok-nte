@@ -2,3 +2,4 @@ ok-script
 onnxocr-ppocrv5
 openvino
 opencv-python
+scikit-image

@@ -61,12 +61,12 @@ body:
       label: 截图、日志和录屏 / Screenshots, Logs & Recordings
       description: |
         **上传方式 / How to upload:**
-        1. 游戏画面的截图一律使用ok-dna自带的截图功能。
+        1. 游戏画面的截图一律使用ok-nte自带的截图功能。
         2. 将图片、视频或 `.log` 文件直接 **拖拽** 到下方文本框中。
         3. 也可以使用剪贴板粘贴图片 (Ctrl+V)。
 
         **English Instructions:**
-        1. **Game Screenshots:** Please strictly use the built-in screenshot of 'ok-dna'.
+        1. **Game Screenshots:** Please strictly use the built-in screenshot of 'ok-nte'.
         2. **Drag & Drop** images, videos, or `.log` files into the text area below, or paste directly.
       placeholder: 请将截图、屏幕录像或日志文件拖放到此处... / Drag and drop screenshots, recordings, or logs here...
     validations:
@@ -76,7 +76,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: ok-dna 出现 bug 的版本 / Buggy Version
+      label: ok-nte 出现 bug 的版本 / Buggy Version
       placeholder: e.g. 1.0.1
     validations:
       required: true
@@ -84,7 +84,7 @@ body:
   - type: input
     id: last_working_version
     attributes:
-      label: ok-dna 最近未出现 bug 的版本 / Last Working Version
+      label: ok-nte 最近未出现 bug 的版本 / Last Working Version
       placeholder: e.g. 1.0.0
     validations:
       required: false
