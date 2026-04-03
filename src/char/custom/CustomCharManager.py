@@ -12,7 +12,7 @@ logger = Logger.get_logger(__name__)
 CUSTOM_CHARS_DIR = "custom_chars"
 FEATURES_DIR = os.path.join(CUSTOM_CHARS_DIR, "features")
 DB_PATH = os.path.join(CUSTOM_CHARS_DIR, "db.json")
-DB_SCHEMA_VERSION = 2
+DB_SCHEMA_VERSION = 3
 
 
 class CustomCharManager:
@@ -74,6 +74,34 @@ class CustomCharManager:
     def is_builtin_combo(combo_name: str) -> bool:
         return CustomCharManager.get_builtin_key(combo_name) is not None
 
+    @staticmethod
+    def _normalize_char_name(char_name) -> str:
+        return str(char_name or "").strip()
+
+    def _character_name_from_record(self, char_id: str, char_data: dict) -> str:
+        name = self._normalize_char_name(char_data.get("name", ""))
+        if name:
+            return name
+        fallback = self._normalize_char_name(char_id)
+        return fallback or "unnamed"
+
+    def _find_character_id_by_name(self, char_name: str) -> str | None:
+        target = self._normalize_char_name(char_name)
+        if not target:
+            return None
+        for char_id, char_data in self.db.get("characters", {}).items():
+            if not isinstance(char_data, dict):
+                continue
+            if self._character_name_from_record(char_id, char_data) == target:
+                return char_id
+        return None
+
+    def _generate_character_id(self) -> str:
+        while True:
+            char_id = f"char_{uuid.uuid4().hex}"
+            if char_id not in self.db["characters"]:
+                return char_id
+
     def load_db(self):
         loaded = self._default_db()
         if os.path.exists(DB_PATH):
@@ -93,13 +121,31 @@ class CustomCharManager:
         with self._data_lock:
             modified = False
 
+            if not isinstance(self.db.get("characters"), dict):
+                self.db["characters"] = {}
+                modified = True
+
             if not isinstance(self.db.get("features"), dict):
                 self.db["features"] = {}
                 modified = True
 
-            for char_name, char_data in self.db["characters"].items():
+            for char_id, char_data in self.db["characters"].items():
+                if not isinstance(char_data, dict):
+                    self.db["characters"][char_id] = {
+                        "name": self._normalize_char_name(char_id) or "unnamed",
+                        "combo_ref": "",
+                        "combo_name": "",
+                        "feature_ids": [],
+                    }
+                    char_data = self.db["characters"][char_id]
+                    modified = True
+
+                feature_ids = char_data.get("feature_ids", [])
+                if not isinstance(feature_ids, list):
+                    feature_ids = []
+                    modified = True
                 valid_fids = []
-                for fid in char_data.get("feature_ids", []):
+                for fid in feature_ids:
                     path = os.path.join(FEATURES_DIR, f"{fid}.png")
                     if os.path.exists(path):
                         valid_fids.append(fid)
@@ -160,26 +206,74 @@ class CustomCharManager:
                 self.db["combos"] = normalized_combos
                 modified = True
 
-            for char_name, char_data in self.db.get("characters", {}).items():
-                if not isinstance(char_data, dict):
-                    self.db["characters"][char_name] = {"combo_ref": "", "combo_name": "", "feature_ids": []}
-                    modified = True
-                    continue
+            normalized_characters = {}
+            used_names = set()
+            legacy_id_index = 1
 
-                combo_raw = char_data.get("combo_ref", char_data.get("combo_name", ""))
+            def next_legacy_id():
+                nonlocal legacy_id_index
+                while True:
+                    candidate = f"char_{legacy_id_index:04d}"
+                    legacy_id_index += 1
+                    if candidate not in normalized_characters:
+                        return candidate
+
+            for raw_char_id, raw_char_data in self.db.get("characters", {}).items():
+                source_data = raw_char_data if isinstance(raw_char_data, dict) else {}
+                if not isinstance(raw_char_data, dict):
+                    modified = True
+
+                record = dict(source_data)
+
+                char_name = self._normalize_char_name(record.get("name", raw_char_id))
+                if not char_name:
+                    char_name = "unnamed"
+                    modified = True
+
+                unique_name = char_name
+                suffix = 2
+                while unique_name in used_names:
+                    unique_name = f"{char_name}_{suffix}"
+                    suffix += 1
+                if unique_name != char_name:
+                    modified = True
+                used_names.add(unique_name)
+
+                combo_raw = record.get("combo_ref", record.get("combo_name", ""))
                 combo_ref = self.to_combo_ref(combo_raw)
-                if char_data.get("combo_ref") != combo_ref:
-                    char_data["combo_ref"] = combo_ref
-                    modified = True
-                # Backward-compatible alias until full field migration is complete.
-                if char_data.get("combo_name") != combo_ref:
-                    char_data["combo_name"] = combo_ref
+                feature_ids = record.get("feature_ids", [])
+                if not isinstance(feature_ids, list):
+                    feature_ids = []
                     modified = True
 
-                feature_ids = char_data.get("feature_ids", [])
-                if not isinstance(feature_ids, list):
-                    char_data["feature_ids"] = []
+                record["name"] = unique_name
+                record["combo_ref"] = combo_ref
+                # Backward-compatible alias until full field migration is complete.
+                record["combo_name"] = combo_ref
+                record["feature_ids"] = feature_ids
+
+                raw_char_id = str(raw_char_id).strip()
+                if "name" in source_data and raw_char_id:
+                    char_id = raw_char_id
+                else:
+                    # Legacy schema: key was character name; migrate to stable ID.
+                    char_id = next_legacy_id()
                     modified = True
+
+                while char_id in normalized_characters:
+                    char_id = next_legacy_id()
+                    modified = True
+
+                if record != source_data:
+                    modified = True
+                if raw_char_id != char_id:
+                    modified = True
+
+                normalized_characters[char_id] = record
+
+            if normalized_characters != self.db["characters"]:
+                self.db["characters"] = normalized_characters
+                modified = True
 
             if self.db.get("schema_version") != DB_SCHEMA_VERSION:
                 self.db["schema_version"] = DB_SCHEMA_VERSION
@@ -235,33 +329,65 @@ class CustomCharManager:
     def add_character(self, char_name, combo_name):
         """添加或更新角色属性 (不包含特征图)"""
         with self._data_lock:
+            char_name = self._normalize_char_name(char_name)
+            if not char_name:
+                return
             combo_ref = self.to_combo_ref(combo_name)
-            if char_name not in self.db["characters"]:
-                self.db["characters"][char_name] = {
+            char_id = self._find_character_id_by_name(char_name)
+            if char_id is None:
+                char_id = self._generate_character_id()
+                self.db["characters"][char_id] = {
+                    "name": char_name,
                     "combo_ref": combo_ref,
                     "combo_name": combo_ref,
                     "feature_ids": []
                 }
             else:
-                self.db["characters"][char_name]["combo_ref"] = combo_ref
-                self.db["characters"][char_name]["combo_name"] = combo_ref
+                self.db["characters"][char_id]["name"] = char_name
+                self.db["characters"][char_id]["combo_ref"] = combo_ref
+                self.db["characters"][char_id]["combo_name"] = combo_ref
             self._invalidate_feature_cache()
             self.save_db()
 
     def delete_character(self, char_name):
         """删除角色及其所有特征图，不影响出招表"""
         with self._data_lock:
-            if char_name in self.db["characters"]:
-                feature_ids = self.db["characters"][char_name].get("feature_ids", [])
-                for fid in feature_ids:
-                    self.delete_feature_image(fid)
-                del self.db["characters"][char_name]
-                self._invalidate_feature_cache()
-                self.save_db()
+            char_id = self._find_character_id_by_name(char_name)
+            if char_id is None:
+                return
+            feature_ids = self.db["characters"][char_id].get("feature_ids", [])
+            for fid in feature_ids:
+                self.delete_feature_image(fid)
+            del self.db["characters"][char_id]
+            self._invalidate_feature_cache()
+            self.save_db()
+
+    def rename_character(self, old_name: str, new_name: str) -> bool:
+        with self._data_lock:
+            old_name = self._normalize_char_name(old_name)
+            new_name = self._normalize_char_name(new_name)
+            if not old_name or not new_name:
+                return False
+            if old_name == new_name:
+                return True
+            old_char_id = self._find_character_id_by_name(old_name)
+            if old_char_id is None:
+                return False
+            duplicate_char_id = self._find_character_id_by_name(new_name)
+            if duplicate_char_id is not None and duplicate_char_id != old_char_id:
+                return False
+
+            self.db["characters"][old_char_id]["name"] = new_name
+            self._invalidate_feature_cache()
+            self.save_db()
+            return True
 
     def add_feature_to_character(self, char_name, image_mat, width=0, height=0):
         """为角色保存一张截图并关联特征 UUID"""
         with self._data_lock:
+            char_name = self._normalize_char_name(char_name)
+            if not char_name:
+                return ""
             fid = f"feat_{uuid.uuid4().hex}"
             self.save_feature_image(fid, image_mat)
 
@@ -269,17 +395,20 @@ class CustomCharManager:
                 self.db["features"] = {}
             self.db["features"][fid] = {"width": width, "height": height}
 
-            if char_name not in self.db["characters"]:
-                self.db["characters"][char_name] = {
+            char_id = self._find_character_id_by_name(char_name)
+            if char_id is None:
+                char_id = self._generate_character_id()
+                self.db["characters"][char_id] = {
+                    "name": char_name,
                     "combo_ref": "",
                     "combo_name": "",
                     "feature_ids": []
                 }
 
-            if "feature_ids" not in self.db["characters"][char_name]:
-                self.db["characters"][char_name]["feature_ids"] = []
+            if "feature_ids" not in self.db["characters"][char_id]:
+                self.db["characters"][char_id]["feature_ids"] = []
 
-            self.db["characters"][char_name]["feature_ids"].append(fid)
+            self.db["characters"][char_id]["feature_ids"].append(fid)
             self._invalidate_feature_cache()
             self.save_db()
             return fid
@@ -287,13 +416,15 @@ class CustomCharManager:
     def remove_feature_from_character(self, char_name, feature_id):
         """从角色中移除某个特征"""
         with self._data_lock:
-            if char_name in self.db["characters"]:
-                feature_ids = self.db["characters"][char_name].get("feature_ids", [])
-                if feature_id in feature_ids:
-                    feature_ids.remove(feature_id)
-                    self.delete_feature_image(feature_id)
-                    self._invalidate_feature_cache()
-                    self.save_db()
+            char_id = self._find_character_id_by_name(char_name)
+            if char_id is None:
+                return
+            feature_ids = self.db["characters"][char_id].get("feature_ids", [])
+            if feature_id in feature_ids:
+                feature_ids.remove(feature_id)
+                self.delete_feature_image(feature_id)
+                self._invalidate_feature_cache()
+                self.save_db()
 
     def save_feature_image(self, feature_id, image_mat):
         """保存特征图"""
@@ -328,11 +459,12 @@ class CustomCharManager:
         current_scr_h, current_scr_w = og.executor.frame.shape[:2]
 
         with self._data_lock:
-            character_snapshot = {
-                char_name: list(char_data.get("feature_ids", []))
-                for char_name, char_data in self.db["characters"].items()
-                if isinstance(char_data, dict)
-            }
+            character_snapshot = {}
+            for char_id, char_data in self.db["characters"].items():
+                if not isinstance(char_data, dict):
+                    continue
+                char_name = self._character_name_from_record(char_id, char_data)
+                character_snapshot[char_name] = list(char_data.get("feature_ids", []))
             current_fids = set()
             for feature_ids in character_snapshot.values():
                 current_fids.update(feature_ids)
@@ -393,11 +525,16 @@ class CustomCharManager:
         """获取所有角色数据"""
         with self._data_lock:
             characters = {}
-            for char_name, char_data in self.db["characters"].items():
+            for char_id, char_data in self.db["characters"].items():
                 if isinstance(char_data, dict):
-                    characters[char_name] = dict(char_data)
+                    out = dict(char_data)
+                    char_name = self._character_name_from_record(char_id, char_data)
+                    out["name"] = char_name
+                    characters[char_name] = out
                 else:
-                    characters[char_name] = char_data
+                    char_name = self._normalize_char_name(char_id)
+                    if char_name:
+                        characters[char_name] = char_data
             return characters
 
     def get_character_combo_ref(self, char_name: str) -> str:
@@ -409,10 +546,14 @@ class CustomCharManager:
 
     def get_character_info(self, char_name):
         with self._data_lock:
-            char_info = self.db["characters"].get(char_name, None)
+            char_id = self._find_character_id_by_name(char_name)
+            if char_id is None:
+                return None
+            char_info = self.db["characters"].get(char_id, None)
             if isinstance(char_info, dict):
                 combo_ref = self.to_combo_ref(char_info.get("combo_ref", char_info.get("combo_name", "")))
                 out = dict(char_info)
+                out["name"] = self._character_name_from_record(char_id, char_info)
                 out["combo_ref"] = combo_ref
                 # Backward-compatible alias for existing call sites.
                 out["combo_name"] = combo_ref

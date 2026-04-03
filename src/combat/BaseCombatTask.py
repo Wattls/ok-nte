@@ -5,6 +5,7 @@ from decimal import Decimal, ROUND_UP, ROUND_DOWN
 import cv2
 import numpy as np
 from skimage.metrics import structural_similarity as ssim
+from skimage.feature import ORB, match_descriptors
 
 from ok import Logger, Config
 from ok import color_range_to_bound
@@ -14,11 +15,12 @@ from ok.feature.Box import get_bounding_box
 from src import text_white_color
 from src.Labels import Labels
 from src.combat.CombatCheck import CombatCheck
-from src.char.BaseChar import Priority
+from src.char.BaseChar import Priority, Element
 from src.char.Healer import Healer
 from src.char.CharFactory import get_char_by_pos
+from src.tasks.BaseNTETask import binarize_bgr_by_adaptive_center, blackout_corners_by_circle, display_image
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
 if TYPE_CHECKING:
     from src.char.BaseChar import BaseChar
@@ -229,9 +231,13 @@ class BaseCombatTask(CombatCheck):
         self.combat_end()
         self.wait_in_team_and_world(time_out=10, raise_if_not_found=False)
 
-    def _decide_switch_to(self, current_char: 'BaseChar', free_intro=False):
-        has_intro = free_intro #or current_char.is_cycle_full()
+    def _decide_switch_to(self, current_char: 'BaseChar', free_intro=False, require_intro=False):
+        has_intro = free_intro or current_char.is_cycle_full()
         switch_to = current_char
+
+        if require_intro and not has_intro:
+            return switch_to, has_intro
+
         max_priority = Priority.MIN
 
         # vibrate_set = set(self.vibrate_chars_index) if has_intro and self.vibrate_chars_index else None
@@ -313,9 +319,9 @@ class BaseCombatTask(CombatCheck):
             self.check_combat()
             current_time = time.time()
 
-            is_char_switch = self.has_char_slot_changed(switch_to.index)
+            is_char_switched = self.has_char_slot_changed(switch_to.index)
 
-            if not is_char_switch:
+            if not is_char_switched:
                 self.click(interval=0.2)
             else:
                 self.in_ultimate = False
@@ -325,17 +331,16 @@ class BaseCombatTask(CombatCheck):
                     current_char.last_outro_time = time.time()
                 break
 
-            # if not is_char_switch and not has_intro and current_time - last_decide_time > 0.12:
-            #     last_decide_time = current_time
-            #     if self.is_cycle_full():
-            #         new_switch_to, new_has_intro = self._decide_switch_to(current_char, free_intro)
-            #         if new_has_intro and new_switch_to != current_char:
-            #             switch_to = new_switch_to
-            #             has_intro = new_has_intro
-            #             switch_to.has_intro = True
-            #             logger.info(f'switch_next_char updated target to {switch_to} has_intro {switch_to.has_intro}')
+            if not is_char_switched and not has_intro and current_time - last_decide_time > 0.12:
+                last_decide_time = current_time
+                new_switch_to, new_has_intro = self._decide_switch_to(current_char, free_intro, require_intro=True)
+                if new_has_intro and new_switch_to != current_char:
+                    switch_to = new_switch_to
+                    has_intro = new_has_intro
+                    switch_to.has_intro = True
+                    logger.info(f'switch_next_char updated target to {switch_to} has_intro {switch_to.has_intro}')
 
-            if not self.in_world():
+            if not self.is_in_team():
                 logger.info(f'not in world while switching chars_{current_char}_to_{switch_to} {current_time - start_time}')
                 # if self.debug:
                 #     self.screenshot(f'not in team while switching chars_{current_char}_to_{switch_to} {now - start}')
@@ -481,8 +486,8 @@ class BaseCombatTask(CombatCheck):
             logger.warning(f'char count {count} larger than 4, set to 4')
             count = 4
 
-        self.chars = []
-
+        elements = self.load_chars_element(count)
+        new_chars = []
         for i in range(count):
             box = self.get_box_by_name(f'box_char_{i+1}')
             if count == 1:
@@ -490,7 +495,9 @@ class BaseCombatTask(CombatCheck):
                 box = box.copy(x_offset=offset)
             box_scaled = box.scale(1.1, 1.1)
             char = get_char_by_pos(self, box_scaled, i, safe_get(self.chars, i))
-            self.chars.append(char)
+            char.element = elements[i]
+            new_chars.append(char)
+        self.chars = new_chars
 
         healer_count = 0
         for char in self.chars:
@@ -507,142 +514,142 @@ class BaseCombatTask(CombatCheck):
             self.info_set('Chars', [f"{c.char_name}: {c.combo_name}" for c in self.chars if c is not None])
             for c in self.chars:
                 if c:
-                    self.log_info(f'loaded chars success {c} {c.confidence}')
+                    self.log_info(f'loaded chars success {c} {c.confidence} {c.element}')
             return True
         return False
 
-    def _get_aura_box_coords(self) -> dict:
-        """
-        [内部方法] 统一生成4个角色的裁剪坐标。避免每次检测都重复计算。
-        """
-        width_percentage = 36 / 2560 
-        height_percentage = 60 / 1440
-        points = {
-            1: (0.9500, 0.1910),
-            2: (0.9500, 0.3132),
-            3: (0.9500, 0.4361),
-            4: (0.9500, 0.5583),
-        }
-        x_shift = 0.9113 - 0.9500
-        y_shift = 0.4256 - 0.4361
+    # def load_chars_element(self, count=4):
+    #     def processor(image):
+    #         image = binarize_bgr_by_adaptive_center(image)
+    #         image = blackout_corners_by_circle(image)
+    #         return image
+    #     results = []
+    #     to_find = [Labels.blue_element, Labels.green_element, Labels.red_element, Labels.purple_element, Labels.yellow_element, Labels.white_element]
+    #     first_box = self.box_of_screen_scaled(2560, 1440, 2438, 335, width_original=29, height_original=29)
+    #     for i in range(count):
+    #         box = first_box.copy(y_offset=int(self.height * 176 / 1440 * i))
+    #         display_image(processor(box.crop_frame(self.frame)), f'char_{i+1}_element')
+    #         best = self.find_best_match_in_box(box, to_find, threshold=0.4, frame_processor=processor)
+    #         if best:
+    #             name = best.name.value
+    #             confidence = best.confidence
+    #         else:
+    #             name = None
+    #             confidence = 0
+    #         self.log_debug(f'char_{i+1}_element {name} {confidence}')
+    #         results.append(name)
+    #     return results
 
-        boxes_coords = {}
-        for i, point in points.items():
-            x, y = point[0] + x_shift, point[1] + y_shift
-            boxes_coords[i] = (x, y, x + width_percentage, y + height_percentage)
+    def load_chars_element(self, count=4) -> List[Element]:
+        
+        def processor(image):
+            image = binarize_bgr_by_adaptive_center(image)
+            image = blackout_corners_by_circle(image)
+            return image
+        
+        results = []
+        to_find = [Labels.blue_element, Labels.green_element, Labels.red_element, Labels.purple_element, Labels.yellow_element, Labels.white_element]
+        elements = [Element.BLUE, Element.GREEN, Element.RED, Element.PURPLE, Element.YELLOW, Element.WHITE]
+        first_box = self.box_of_screen_scaled(2560, 1440, 2438, 335, width_original=29, height_original=29)
+        
+        orb = ORB(n_keypoints=100)
+        
+        sample_img = first_box.crop_frame(self.frame)
+        target_size = (sample_img.shape[1] * 4, sample_img.shape[0] * 4)
+        
+        precomputed_descriptors = {}
+        for label in to_find:
+            feature = self.get_feature_by_name(label).mat
+            feature_gray = cv2.cvtColor(feature, cv2.COLOR_BGR2GRAY)
+            feature_gray = cv2.resize(feature_gray, target_size, interpolation=cv2.INTER_NEAREST)
+            try:
+                orb.detect_and_extract(feature_gray)
+                precomputed_descriptors[label] = orb.descriptors
+            except RuntimeError:
+                precomputed_descriptors[label] = None
+        
+        for i in range(count):
+            box = first_box.copy(y_offset=int(self.height * 176 / 1440 * i))
+            img = processor(box.crop_frame(self.frame))
+            img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            img_gray = cv2.resize(img_gray, target_size, interpolation=cv2.INTER_NEAREST)
+            # display_image(img_gray, f'char_{i+1}_element_gray')
             
-        return boxes_coords
-
-    def _detect_aura_feature(self, cropped, box) -> bool:
-        """
-        [内部方法] 处理已被裁剪好的图像并检测特征（完全保留你的遮罩和判定逻辑）
-        """
-        if cropped is None or cropped.size == 0:
-            return False
-
-        # 3. 获取裁剪后图像的高宽
-        h, w = cropped.shape[:2]
-
-        # 4. 动态生成遮罩 (专门切除右下角)
-        mask = np.full((h, w), 255, dtype=np.uint8)
-        
-        pt_bottom = (int(w * 0.4), h)    
-        pt_right = (w, int(h * 0.6))     
-        pt_corner = (w, h)               # 右下角绝对顶点
-        triangle = np.array([pt_bottom, pt_right, pt_corner], dtype=np.int32)
-        cv2.fillPoly(mask, [triangle], 0)
-        
-        # 将遮罩应用到截图上
-        roi_masked = cv2.bitwise_and(cropped, cropped, mask=mask)
-
-        # 5. HSV 颜色特征提取
-        hsv = cv2.cvtColor(roi_masked, cv2.COLOR_BGR2HSV)
-        
-        # 特征一：外侧青色闪电
-        lower_cyan = np.array([80, 100, 150])
-        upper_cyan = np.array([105, 255, 255])
-        mask_cyan = cv2.inRange(hsv, lower_cyan, upper_cyan)
-        
-        # 特征二：内侧粉红色边缘
-        lower_pink1 = np.array([160, 100, 150])
-        upper_pink1 = np.array([180, 255, 255])
-        lower_pink2 = np.array([0, 100, 150])
-        upper_pink2 = np.array([10, 255, 255])
-        mask_pink = cv2.bitwise_or(
-            cv2.inRange(hsv, lower_pink1, upper_pink1),
-            cv2.inRange(hsv, lower_pink2, upper_pink2)
-        )
-
-        # 6. 统计符合颜色的像素数量
-        cyan_count = cv2.countNonZero(mask_cyan)
-        pink_count = cv2.countNonZero(mask_pink)
-
-        # 7. 动态阈值判定
-        pixel_threshold = int((w * h) * 0.002) 
-
-        # 判定逻辑和画框
-        is_active = (cyan_count > pixel_threshold) and (pink_count > pixel_threshold)
-        box.name = f"{cyan_count}, {pink_count}"
-        if is_active:
-            self.draw_boxes(box.name, [box], color='blue')
+            try:
+                orb.detect_and_extract(img_gray)
+                img_descriptors = orb.descriptors
+            except RuntimeError:
+                img_descriptors = None
             
-        return is_active
-
-    def check_avatar_vibrate(self, char_index: int) -> bool:
-        """
-        检测指定位置(1~4)的角色是否有红蓝锯齿特效
-        """
-        boxes_coords = self._get_aura_box_coords()
-        if char_index not in boxes_coords:
-            raise ValueError("角色索引必须在 1 到 4 之间")
-
-        # 若调用单次检测，则依然单独复制一次画面
-        x1, y1, x2, y2 = boxes_coords[char_index]
-        box = self.box_of_screen(x1, y1, x2, y2)
-        cropped = box.crop_frame(self.frame.copy())
-        
-        return self._detect_aura_feature(cropped, box)
-
-    def get_all_avatar_vibrate(self) -> dict:
-        """
-        一次性返回所有4个角色的共振状态
-        :return: 类似 {1: False, 2: False, 3: True, 4: False} 的字典
-        """
-        # 1. 获取事先算好的4个坐标点
-        boxes_coords = self._get_aura_box_coords()
-        
-        # 2. 【核心优化】全过程只 copy 这一次游戏画面
-        current_frame = self.frame.copy()
-        
-        status = {}
-        # 3. 循环 4 次，复用同一个 current_frame 进行 crop 和特征提取
-        if all(item is None for item in self.chars):
-            self.load_chars()
-        for i, char in enumerate(self.chars):
-            if char is None:
-                continue
-            i += 1
-            x1, y1, x2, y2 = boxes_coords[i]
-            box = self.box_of_screen(x1, y1, x2, y2)
+            best_element = Element.DEFAULT
+            max_matches = -1
             
-            # 使用唯一画面切图
-            cropped = box.crop_frame(current_frame) 
-            
-            # 获取状态并存入字典
-            status[i] = self._detect_aura_feature(cropped, box)
-            
-        return status
+            for idx, label in enumerate(to_find):
+                feat_descriptors = precomputed_descriptors[label]
+                
+                num_matches = 0
+                if img_descriptors is not None and feat_descriptors is not None and len(img_descriptors) > 0 and len(feat_descriptors) > 0:
+                    matches = match_descriptors(img_descriptors, feat_descriptors, cross_check=True)
+                    num_matches = len(matches)
+                
+                if num_matches > max_matches:
+                    max_matches = num_matches
+                    best_element = elements[idx]
+
+            results.append(best_element)
+            self.log_debug(f'char_{i+1}_element {best_element.name} with {max_matches} matches')
+        return results
 
     def is_cycle_full(self) -> bool:
-        ret = False
-        chars = []
-        status = self.get_all_avatar_vibrate()
-        for i, v in status.items():
-            if v:
-                ret = True
-                chars.append(i-1)
-        self.vibrate_chars_index = chars
-        return ret
+        img = self.box_of_screen_scaled(2560, 1440, 944, 1316, width_original=66, height_original=66).crop_frame(self.frame)
+        h, w = img.shape[:2]
+        side = h
+        
+        # 1. 预处理：灰度化 + 二值化
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        _, thresh = cv2.threshold(gray, 128, 255, cv2.THRESH_BINARY)
+
+        # 2. 构造环形掩模 (Mask) —— 进一步排除干扰
+        # 环厚度约 12%，我们可以只看这个半径范围内的像素
+        mask = np.zeros((h, w), dtype=np.uint8)
+        center = (w // 2, h // 2)
+        outer_r = side // 2
+        inner_r = int(outer_r * (1 - 0.15)) # 稍微多给一点余量，取15%
+        cv2.circle(mask, center, outer_r, 255, -1)
+        cv2.circle(mask, center, inner_r, 0, -1)
+        
+        # 应用掩模，只保留环形区域
+        ring_only = cv2.bitwise_and(thresh, thresh, mask=mask)
+
+        # 3. 取样区定义 (核心：对比顶部和底部)
+        # 取顶部中心 10%x10% 的区域，以及底部中心同样的区域
+        roi_size = int(side * 0.1) 
+        margin = int(side * 0.02) # 避开最边缘可能存在的黑边
+        
+        # 顶部采样区 (12点钟方向)
+        top_roi = ring_only[margin : margin + roi_size, 
+                            (w//2 - roi_size//2) : (w//2 + roi_size//2)]
+        
+        # 底部采样区 (6点钟方向)
+        bottom_roi = ring_only[(h - margin - roi_size) : (h - margin), 
+                            (w//2 - roi_size//2) : (w//2 + roi_size//2)]
+
+        # 4. 计算白色像素密度
+        top_density = np.sum(top_roi == 255)
+        bottom_density = np.sum(bottom_roi == 255)
+
+        # 5. 精准判断逻辑
+        # 如果满了，top_density 应该和 bottom_density 非常接近
+        # 如果没满（有缺口），top_density 会显著低于 bottom_density
+        if bottom_density == 0: return False # 防止除以0
+        
+        ratio = top_density / bottom_density
+        
+        # 阈值建议：如果 ratio > 0.9，认为已经满了
+        # “差一点点”的时候，由于缺口正好在顶部，这个 ratio 会瞬间降到 0.5 以下甚至更低
+        is_full = ratio > 0.9
+        
+        return is_full
     
     def has_char_slot_changed(self, index: int, reset_char_slot: bool=False) -> bool:
         def check_size(img1, img2):

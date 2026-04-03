@@ -3,11 +3,13 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import Any
 
+from src.Labels import Labels
 from src.char.BaseChar import BaseChar
 from src.char.Zero import Zero
 from src.char.Mint import Mint
 
 if TYPE_CHECKING:
+    from src.char.custom.CustomCharManager import CustomCharManager
     from src.combat.BaseCombatTask import BaseCombatTask
     from ok import Box
     import numpy as np
@@ -21,7 +23,7 @@ char_dict: dict[str, dict[str, Any]] = {
 char_names = char_dict.keys()
 
 
-def _build_char_instance(task, index, match_name, sim, manager):
+def _build_char_instance(task, index, match_name, sim, manager: 'CustomCharManager'):
     from src.char.custom.CustomChar import CustomChar
 
     char_info = manager.get_character_info(match_name)
@@ -33,7 +35,8 @@ def _build_char_instance(task, index, match_name, sim, manager):
     builtin_key = manager.get_builtin_key(combo_ref)
     if builtin_key and builtin_key in char_dict:
         cls: 'BaseChar' = char_dict[builtin_key].get('cls', BaseChar)
-        instance = cls(task, index, char_name=match_name, confidence=sim)
+        instance: 'BaseChar' = cls(task, index, char_name=match_name, confidence=sim)
+        instance.builtin_key = builtin_key
         instance.combo_name = manager.to_combo_label(combo_ref)
         return instance
     

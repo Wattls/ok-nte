@@ -4,7 +4,8 @@ from PySide6.QtWidgets import (QGridLayout, QHBoxLayout,
 
 from qfluentwidgets import (CardWidget, EditableComboBox, FluentIcon,
                             ImageLabel, ListWidget, PrimaryPushButton, InfoBar, InfoBarPosition,
-                            PushButton, SubtitleLabel, TextEdit, TitleLabel)
+                            PushButton, SubtitleLabel, TextEdit, TitleLabel, TransparentToolButton,
+                            MessageBoxBase, LineEdit)
 
 from ok import og
 from ok.gui.widget.CustomTab import CustomTab
@@ -41,6 +42,10 @@ class CharManagerTab(CustomTab):
         self.tr_import_success = og.app.tr("导入成功")
         self.tr_import_msg = og.app.tr("已导入 {} 个文件")
         self.tr_combo_invalid_title = og.app.tr("出招表语法错误")
+        self.tr_edit_char_name = og.app.tr("编辑名称")
+        self.tr_rename_failed_title = og.app.tr("重命名失败")
+        self.tr_rename_failed = og.app.tr("角色名称无效或已存在")
+        self.tr_rename_msg = og.app.tr("角色已重命名为: {}")
         
         self.tr_name = og.app.tr('角色管理')
         self.tr_choose_char = og.app.tr('👈 请在左侧选择一个角色以管理特征和出招表')
@@ -91,8 +96,19 @@ class CharManagerTab(CustomTab):
         self.detail_v_layout = QVBoxLayout(self.detail_widget)
         self.detail_v_layout.setContentsMargins(20, 20, 20, 20)
 
+        self.detail_h_layout = QHBoxLayout()
+
         self.char_title = TitleLabel(self.tr_choose_char)
-        self.detail_v_layout.addWidget(self.char_title)
+        self.char_title.margin
+        self.detail_h_layout.addWidget(self.char_title)
+
+        self.char_name_edit_btn = TransparentToolButton(FluentIcon.EDIT)
+        self.char_name_edit_btn.setToolTip(self.tr_edit_char_name)
+        self.char_name_edit_btn.clicked.connect(self.on_edit_char_name)
+        self.char_name_edit_btn.hide()
+        self.detail_h_layout.addWidget(self.char_name_edit_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+        self.detail_h_layout.addStretch(1) 
+        self.detail_v_layout.addLayout(self.detail_h_layout)
 
         # === 特征图区 ===
         self.detail_v_layout.addWidget(SubtitleLabel(og.app.tr("已绑定的特征图")))
@@ -132,7 +148,7 @@ class CharManagerTab(CustomTab):
         self.combo_test_btn.clicked.connect(self.on_test_combo)
         self.combo_actions_layout.addWidget(self.combo_test_btn)
 
-        self.combo_save_btn = PrimaryPushButton(FluentIcon.SAVE, og.app.tr("保存出招表"))
+        self.combo_save_btn = PrimaryPushButton(FluentIcon.SAVE, og.app.tr("应用更改"))
         self.combo_save_btn.clicked.connect(self.on_save_combo)
         self.combo_actions_layout.addWidget(self.combo_save_btn)
 
@@ -171,6 +187,7 @@ class CharManagerTab(CustomTab):
 
         self.delete_char_btn.setEnabled(False)
         self.char_title.setText(self.tr_choose_char)
+        self.char_name_edit_btn.hide()
         for i in reversed(range(self.feature_grid.count())):
             widget = self.feature_grid.itemAt(i).widget()
             if widget:
@@ -294,6 +311,8 @@ class CharManagerTab(CustomTab):
 
     def on_char_selected(self, item):
         if not item:
+            self.current_char = None
+            self.char_name_edit_btn.hide()
             return
         self.current_char = item.text()
         self._render_right_panel()
@@ -337,6 +356,7 @@ class CharManagerTab(CustomTab):
 
         self.delete_char_btn.setEnabled(True)
         self.char_title.setText(self.current_char)
+        self.char_name_edit_btn.show()
         combo_ref = self.manager.to_combo_ref(char_info.get("combo_name", ""))
         combo_name = self.manager.to_combo_label(combo_ref)
         self._set_combo_selection_by_ref(combo_ref)
@@ -518,6 +538,65 @@ class CharManagerTab(CustomTab):
         InfoBar.success(
             title=self.tr_del_success,
             content=self.tr_del_char_msg.format(char_to_delete),
+            orient=Qt.Orientation.Horizontal,
+            isClosable=True,
+            position=InfoBarPosition.TOP,
+            duration=2000,
+            parent=self.window()
+        )
+
+    def _show_edit_dialog(self, old_name):
+        w = MessageBoxBase(self)
+        w.viewLayout.setSpacing(20)
+        w.widget.setMinimumWidth(320)
+
+        w.viewLayout.addWidget(SubtitleLabel(self.tr_edit_char_name, self))
+        
+        line_edit = LineEdit(w)
+        line_edit.setText(old_name)
+        line_edit.setClearButtonEnabled(True)
+        
+        w.viewLayout.addWidget(line_edit)
+
+        if w.exec():
+            new_name = line_edit.text()
+            if new_name and new_name != old_name:
+                return new_name, True
+        return old_name, False
+
+    def on_edit_char_name(self):
+        if not self.current_char:
+            return
+
+        old_name = self.current_char
+        new_name, ok = self._show_edit_dialog(old_name)
+        if not ok:
+            return
+
+        new_name = new_name.strip()
+        if not new_name or new_name == old_name:
+            return
+
+        if not self.manager.rename_character(old_name, new_name):
+            InfoBar.error(
+                title=self.tr_rename_failed_title,
+                content=self.tr_rename_failed,
+                orient=Qt.Orientation.Horizontal,
+                isClosable=True,
+                position=InfoBarPosition.TOP,
+                duration=2000,
+                parent=self.window()
+            )
+            return
+
+        self.refresh_list()
+        items = self.list_widget.findItems(new_name, Qt.MatchFlag.MatchExactly)
+        if items:
+            self.list_widget.setCurrentItem(items[0])
+
+        InfoBar.success(
+            title=self.tr_save_success,
+            content=self.tr_rename_msg.format(new_name),
             orient=Qt.Orientation.Horizontal,
             isClosable=True,
             position=InfoBarPosition.TOP,

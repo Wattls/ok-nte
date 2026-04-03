@@ -54,7 +54,8 @@ class TestCustomCharCore(unittest.TestCase):
 
         manager = CustomCharManager()
         self.assertEqual(manager.db["schema_version"], DB_SCHEMA_VERSION)
-        raw = manager.db["characters"]["char_legacy"]
+        raw = next(iter(manager.db["characters"].values()))
+        self.assertEqual(raw["name"], "char_legacy")
         self.assertEqual(raw["combo_ref"], "combo_old")
         self.assertEqual(raw["combo_name"], "combo_old")
 

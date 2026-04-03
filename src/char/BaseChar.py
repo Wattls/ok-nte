@@ -39,6 +39,17 @@ class Role(StrEnum):
     HEALER = 'Healer'  # 治疗者
 
 
+class Element(StrEnum):
+    """定义角色元素枚举。"""
+    DEFAULT = 'Default'  # 默认/未知元素
+    BLUE = 'Blue'  # 蓝
+    GREEN = 'Green'  # 绿
+    RED = 'Red'  # 红
+    PURPLE = 'Purple'  # 紫
+    YELLOW = 'Yellow'  # 黄
+    WHITE = 'White'  # 白
+
+
 role_values = [role for role in Role]  # 角色定位枚举值的列表
 
 
@@ -56,6 +67,7 @@ class BaseChar:
         self.priority = Priority.BASE
         self.task: 'BaseCombatTask' = task
         self.char_name = char_name
+        self.builtin_key = None
         self.index = index
         self.last_switch_time = -1
         self.last_ultimate = -1
@@ -69,6 +81,7 @@ class BaseChar:
         self.logger = Logger.get_logger(self.name)
         self.cycle_start_time = 0.0
         self.combo_name = "default"
+        self.element = Element.DEFAULT
 
     def cycle_start(self):
         self.cycle_start_time = time.time()
@@ -245,7 +258,7 @@ class BaseChar:
                 self.task.in_ultimate = False
                 break
             if has_animation:
-                if not self.task.in_world():
+                if not self.task.is_in_team():
                     self.task.in_ultimate = True
                     animation_start = time.time()
                     the_time_out = SKILL_TIME_OUT
@@ -359,7 +372,7 @@ class BaseChar:
                 self.task.next_frame()
             if clicked:
                 if self.task.wait_until(
-                    lambda: not self.task.in_world(),
+                    lambda: not self.task.is_in_team(),
                     time_out=0.4,
                     post_action=self.click_with_interval,
                 ):
@@ -377,14 +390,14 @@ class BaseChar:
                 ):
                     self.send_ultimate_key(after_sleep=0.05)
                     if self.task.wait_until(
-                        lambda: not self.task.in_world(), time_out=0.1
+                        lambda: not self.task.is_in_team(), time_out=0.1
                     ):
                         self.task.in_ultimate = True
                         self.logger.debug("not in_team successfully casted ultimate")
                 if not self.task.in_ultimate:
                     return False
         start = time.time()
-        while not self.task.in_world():
+        while not self.task.is_in_team():
             self.task.in_ultimate = True
             if not clicked:
                 clicked = True
