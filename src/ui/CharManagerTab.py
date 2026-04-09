@@ -11,7 +11,7 @@ from qfluentwidgets import (CardWidget, EditableComboBox, FluentIcon, QColor,
 from ok import og
 from ok.gui.widget.CustomTab import CustomTab
 from src.char.custom.CustomCharManager import CustomCharManager
-from src.ui.common import cv_to_pixmap, char_manager_signals
+from src.ui.common import cv_to_pixmap, char_manager_signals, SearchableComboBox
 import json
 import zipfile
 import shutil
@@ -145,7 +145,7 @@ class CharManagerTab(CustomTab):
         self.detail_v_layout.addWidget(SubtitleLabel(self.tr_combo_title))
 
         self.combo_h_layout = QHBoxLayout()
-        self.combo_select = EditableComboBox()
+        self.combo_select = SearchableComboBox()
         self.combo_select.setPlaceholderText(tr_fmt("选择或输入{combo_title}名 (按下回车即可创建)", combo_title=self.tr_combo_title))
         self.combo_select.currentTextChanged.connect(self.on_combo_changed)
         self.combo_h_layout.addWidget(self.combo_select, 1)
@@ -358,7 +358,7 @@ class CharManagerTab(CustomTab):
         self.combo_select.blockSignals(True)
         self.combo_select.clear()
         for label, combo_ref in self.manager.get_all_combo_items():
-            self.combo_select.addItem(label, combo_ref)
+            self.combo_select.addItem(label, userData=combo_ref)
         self.combo_select.setCurrentIndex(-1)
         self.combo_select.blockSignals(False)
 
@@ -394,7 +394,7 @@ class CharManagerTab(CustomTab):
         self.delete_char_btn.setEnabled(True)
         self.char_title.setText(self.current_char)
         self.char_name_edit_btn.show()
-        combo_ref = self.manager.to_combo_ref(char_info.get("combo_name", ""))
+        combo_ref = self.manager.to_combo_ref(char_info.get("combo_ref", ""))
         combo_name = self.manager.to_combo_label(combo_ref)
         self._set_combo_selection_by_ref(combo_ref)
         
@@ -466,7 +466,7 @@ class CharManagerTab(CustomTab):
             self.combo_unbind_btn.setEnabled(self.current_char is not None)
             self.combo_delete_btn.setEnabled(False)  # Built-ins cannot be deleted
             self.combo_test_btn.setEnabled(False)
-            self.combo_select.setReadOnly(True)
+            self.combo_select.setReadOnly(False)
             return
             
         self.combo_text.setReadOnly(False)
@@ -673,7 +673,7 @@ class CharManagerTab(CustomTab):
         
         # 解绑所有正在使用该出招表的角色
         for c_name, c_data in self.manager.get_all_characters().items():
-            if self.manager.to_combo_ref(c_data.get("combo_name", "")) == combo_ref:
+            if self.manager.to_combo_ref(c_data.get("combo_ref", "")) == combo_ref:
                 self.manager.add_character(c_name, "")
                 
         # 刷新出招表下拉列表

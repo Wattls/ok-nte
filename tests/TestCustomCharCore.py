@@ -41,6 +41,7 @@ class TestCustomCharCore(unittest.TestCase):
 
     def test_db_schema_migrates_legacy_combo_name(self):
         legacy = {
+            "schema_version": 3,
             "combos": {"combo_old": "skill,wait(0.1)"},
             "characters": {
                 "char_legacy": {
@@ -57,12 +58,12 @@ class TestCustomCharCore(unittest.TestCase):
         raw = next(iter(manager.db["characters"].values()))
         self.assertEqual(raw["name"], "char_legacy")
         self.assertEqual(raw["combo_ref"], "combo_old")
-        self.assertEqual(raw["combo_name"], "combo_old")
+        self.assertNotIn("combo_name", raw)
 
         info = manager.get_character_info("char_legacy")
         self.assertIsNotNone(info)
         self.assertEqual(info["combo_ref"], "combo_old")
-        self.assertEqual(info["combo_name"], "combo_old")
+        self.assertNotIn("combo_name", info)
 
     def test_db_schema_migrates_legacy_builtin_label(self):
         bootstrap = {
@@ -76,6 +77,7 @@ class TestCustomCharCore(unittest.TestCase):
         legacy_builtin_label = manager.to_combo_label(PREDEFINED_CHARACTER_REF)
 
         legacy = {
+            "schema_version": 3,
             "combos": {},
             "characters": {
                 "char_builtin": {
@@ -92,7 +94,36 @@ class TestCustomCharCore(unittest.TestCase):
         info = manager.get_character_info("char_builtin")
         self.assertIsNotNone(info)
         self.assertEqual(info["combo_ref"], PREDEFINED_CHARACTER_REF)
-        self.assertEqual(info["combo_name"], PREDEFINED_CHARACTER_REF)
+        self.assertNotIn("combo_name", info)
+
+    def test_db_schema_remaps_custom_combo_key_conflicting_with_builtin(self):
+        legacy = {
+            "schema_version": 3,
+            "combos": {
+                PREDEFINED_CHARACTER_REF: "skill,wait(0.1)"
+            },
+            "characters": {
+                "char_conflict": {
+                    "combo_name": PREDEFINED_CHARACTER_REF,
+                    "feature_ids": [],
+                }
+            },
+            "features": {},
+        }
+        self._write_db(legacy)
+
+        manager = CustomCharManager()
+        remapped_key = f"{manager.CUSTOM_COMBO_PREFIX}{PREDEFINED_CHARACTER_REF}"
+
+        self.assertNotIn(PREDEFINED_CHARACTER_REF, manager.db["combos"])
+        self.assertIn(remapped_key, manager.db["combos"])
+        self.assertEqual(manager.get_combo(remapped_key), "skill,wait(0.1)")
+
+        info = manager.get_character_info("char_conflict")
+        self.assertIsNotNone(info)
+        self.assertEqual(info["combo_ref"], remapped_key)
+        self.assertNotIn("combo_name", info)
+        self.assertEqual(manager.get_combo(info["combo_ref"]), "skill,wait(0.1)")
 
     def test_validate_combo_syntax_reports_line_and_column(self):
         is_valid, error = CustomChar.validate_combo_syntax("skill,wait(0.5)")
@@ -181,10 +212,11 @@ class TestCustomCharCore(unittest.TestCase):
             f.write(b"ok")
 
         legacy = {
+            "schema_version": DB_SCHEMA_VERSION,
             "combos": {},
             "characters": {
                 "char_a": {
-                    "combo_name": "",
+                    "combo_ref": "",
                     "feature_ids": [existing_fid, missing_fid],
                 }
             },

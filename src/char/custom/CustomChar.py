@@ -28,7 +28,7 @@ class CustomChar(BaseChar):
     def _load_combo(self):
         char_info = self.manager.get_character_info(self.char_name)
         if char_info:
-            combo_ref = self.manager.to_combo_ref(char_info.get("combo_name", ""))
+            combo_ref = self.manager.to_combo_ref(char_info.get("combo_ref", ""))
             self.combo_name = self.manager.to_combo_label(combo_ref)
             self.combo_str = self.manager.get_combo(combo_ref)
             self._compile_combo()

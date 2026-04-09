@@ -27,7 +27,7 @@ def _build_char_instance(task, index, match_name, sim, manager: 'CustomCharManag
     from src.char.custom.CustomChar import CustomChar
 
     char_info = manager.get_character_info(match_name)
-    combo_ref = manager.to_combo_ref(char_info.get("combo_name", "")) if char_info else ""
+    combo_ref = manager.to_combo_ref(char_info.get("combo_ref", "")) if char_info else ""
     
     if not combo_ref:
         return BaseChar(task, index, char_name=match_name, confidence=sim)

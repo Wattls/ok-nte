@@ -110,7 +110,7 @@ class TestCustomChar(TaskTestCase):
         self.assertIn("char1", self.manager.get_all_characters())
         char_info = self.manager.get_character_info("char1")
         assert char_info is not None
-        self.assertEqual(char_info["combo_name"], "combo_test")
+        self.assertEqual(char_info["combo_ref"], "combo_test")
         
         # 刪除 Combo 檢查
         self.manager.delete_combo("combo_test")
@@ -180,7 +180,7 @@ class TestCustomChar(TaskTestCase):
         tab.on_unbind_combo()
         char_ui_info = self.manager.get_character_info("char_ui_1")
         assert char_ui_info is not None
-        self.assertEqual(char_ui_info["combo_name"], "")
+        self.assertEqual(char_ui_info["combo_ref"], "")
         # 解綁後，介面會刷新，combo_text 應顯示未綁定的提示文字
         self.assertEqual(tab.combo_text.toPlainText(), tab.tr_unbound_text)
 
@@ -225,7 +225,7 @@ class TestCustomChar(TaskTestCase):
         self.manager.add_character("char_builtin", builtin_label)
         char_info = self.manager.get_character_info("char_builtin")
         assert char_info is not None
-        self.assertEqual(char_info["combo_name"], builtin_ref)
+        self.assertEqual(char_info["combo_ref"], builtin_ref)
 
         combos = self.manager.get_all_combos()
         self.assertIn(builtin_label, combos)
@@ -241,6 +241,7 @@ class TestCustomChar(TaskTestCase):
         with open(manager_module.DB_PATH, "w", encoding="utf-8") as f:
             json.dump(
                 {
+                    "schema_version": 3,
                     "combos": {},
                     "characters": {
                         "legacy_char": {
@@ -259,7 +260,7 @@ class TestCustomChar(TaskTestCase):
         migrated_manager = CustomCharManager()
         migrated_info = migrated_manager.get_character_info("legacy_char")
         assert migrated_info is not None
-        self.assertEqual(migrated_info["combo_name"], PREDEFINED_CHARACTER_REF)
+        self.assertEqual(migrated_info["combo_ref"], PREDEFINED_CHARACTER_REF)
 
     def test_char_factory_uses_builtin_ref_without_ui_import(self):
         from src.char.CharFactory import _build_char_instance

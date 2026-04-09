@@ -18,12 +18,13 @@ logger = Logger.get_logger(__name__)
 CUSTOM_CHARS_DIR = "custom_chars"
 FEATURES_DIR = os.path.join(CUSTOM_CHARS_DIR, "features")
 DB_PATH = os.path.join(CUSTOM_CHARS_DIR, "db.json")
-DB_SCHEMA_VERSION = 3
+DB_SCHEMA_VERSION = 4
 
 
 class CustomCharManager:
     _instance = None
     _lock = Lock()
+    CUSTOM_COMBO_PREFIX = "custom:"
 
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
@@ -44,8 +45,8 @@ class CustomCharManager:
         self._cache_scr_h = -1
         self._cache_fids = set()
         self.load_db()
-        self.validate_db()
         self.migrate_db_schema()
+        self.validate_db()
         self.initialized = True
 
     @staticmethod
@@ -80,6 +81,16 @@ class CustomCharManager:
     @staticmethod
     def is_builtin_combo(combo_name: str) -> bool:
         return CustomCharManager.get_builtin_key(combo_name) is not None
+
+    @classmethod
+    def _to_custom_combo_key(cls, combo_key: str, existing_keys: set[str]) -> str:
+        base = f"{cls.CUSTOM_COMBO_PREFIX}{combo_key}"
+        candidate = base
+        suffix = 2
+        while candidate in existing_keys:
+            candidate = f"{base}_{suffix}"
+            suffix += 1
+        return candidate
 
     @staticmethod
     def _normalize_char_name(char_name) -> str:
@@ -116,7 +127,7 @@ class CustomCharManager:
                 with open(DB_PATH, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     if isinstance(data, dict):
-                        loaded["schema_version"] = data.get("schema_version", loaded["schema_version"])
+                        loaded["schema_version"] = data.get("schema_version", 0)
                         loaded["combos"] = data.get("combos", loaded["combos"])
                         loaded["characters"] = data.get("characters", loaded["characters"])
                         loaded["features"] = data.get("features", loaded["features"])
@@ -141,7 +152,6 @@ class CustomCharManager:
                     self.db["characters"][char_id] = {
                         "name": self._normalize_char_name(char_id) or "unnamed",
                         "combo_ref": "",
-                        "combo_name": "",
                         "feature_ids": [],
                     }
                     char_data = self.db["characters"][char_id]
@@ -191,6 +201,13 @@ class CustomCharManager:
     def migrate_db_schema(self):
         with self._data_lock:
             modified = False
+            source_schema_version = self.db.get("schema_version", 0)
+            try:
+                source_schema_version = int(source_schema_version)
+            except (TypeError, ValueError):
+                source_schema_version = 0
+                modified = True
+            use_legacy_combo_name = source_schema_version < 4
 
             if not isinstance(self.db.get("combos"), dict):
                 self.db["combos"] = {}
@@ -203,12 +220,22 @@ class CustomCharManager:
                 modified = True
 
             normalized_combos = {}
+            combo_key_remap = {}
             for combo_name, combo_content in self.db.get("combos", {}).items():
-                combo_ref = self.to_combo_ref(str(combo_name))
-                # Keep any builtin-looking custom keys as-is to avoid accidental data loss.
-                if self.is_builtin_combo(combo_ref):
-                    combo_ref = str(combo_name)
-                normalized_combos[combo_ref] = combo_content
+                combo_key = str(combo_name).strip()
+                if not combo_key:
+                    modified = True
+                    continue
+
+                # Custom combo keys that resolve to builtin refs are ambiguous.
+                # Remap them into an explicit custom namespace.
+                if self.is_builtin_combo(combo_key):
+                    remapped_key = self._to_custom_combo_key(combo_key, set(normalized_combos.keys()))
+                    combo_key_remap[combo_key] = remapped_key
+                    combo_key = remapped_key
+                    modified = True
+
+                normalized_combos[combo_key] = combo_content
             if normalized_combos != self.db["combos"]:
                 self.db["combos"] = normalized_combos
                 modified = True
@@ -246,8 +273,15 @@ class CustomCharManager:
                     modified = True
                 used_names.add(unique_name)
 
-                combo_raw = record.get("combo_ref", record.get("combo_name", ""))
+                combo_ref_raw = str(record.get("combo_ref", "") or "").strip()
+                if not combo_ref_raw and use_legacy_combo_name:
+                    combo_ref_raw = str(record.get("combo_name", "") or "").strip()
+                combo_raw = combo_ref_raw
                 combo_ref = self.to_combo_ref(combo_raw)
+                if combo_ref in combo_key_remap:
+                    combo_ref = combo_key_remap[combo_ref]
+                elif combo_raw in combo_key_remap:
+                    combo_ref = combo_key_remap[combo_raw]
                 feature_ids = record.get("feature_ids", [])
                 if not isinstance(feature_ids, list):
                     feature_ids = []
@@ -255,8 +289,9 @@ class CustomCharManager:
 
                 record["name"] = unique_name
                 record["combo_ref"] = combo_ref
-                # Backward-compatible alias until full field migration is complete.
-                record["combo_name"] = combo_ref
+                if "combo_name" in record:
+                    del record["combo_name"]
+                    modified = True
                 record["feature_ids"] = feature_ids
 
                 raw_char_id = str(raw_char_id).strip()
@@ -314,6 +349,8 @@ class CustomCharManager:
         """获取出招表"""
         with self._data_lock:
             combo_ref = self.to_combo_ref(combo_name)
+            if combo_ref in self.db["combos"]:
+                return self.db["combos"].get(combo_ref, "")
             if self.is_builtin_combo(combo_ref):
                 return ""
             return self.db["combos"].get(combo_ref, "")
@@ -346,13 +383,11 @@ class CustomCharManager:
                 self.db["characters"][char_id] = {
                     "name": char_name,
                     "combo_ref": combo_ref,
-                    "combo_name": combo_ref,
                     "feature_ids": []
                 }
             else:
                 self.db["characters"][char_id]["name"] = char_name
                 self.db["characters"][char_id]["combo_ref"] = combo_ref
-                self.db["characters"][char_id]["combo_name"] = combo_ref
             self._invalidate_feature_cache()
             self.save_db()
 
@@ -408,7 +443,6 @@ class CustomCharManager:
                 self.db["characters"][char_id] = {
                     "name": char_name,
                     "combo_ref": "",
-                    "combo_name": "",
                     "feature_ids": []
                 }
 
@@ -551,7 +585,7 @@ class CustomCharManager:
 
     def get_character_combo_ref(self, char_name: str) -> str:
         info = self.get_character_info(char_name) or {}
-        return self.to_combo_ref(info.get("combo_ref", info.get("combo_name", "")))
+        return self.to_combo_ref(info.get("combo_ref", ""))
 
     def get_character_combo_label(self, char_name: str) -> str:
         return self.to_combo_label(self.get_character_combo_ref(char_name))
@@ -563,12 +597,10 @@ class CustomCharManager:
                 return None
             char_info = self.db["characters"].get(char_id, None)
             if isinstance(char_info, dict):
-                combo_ref = self.to_combo_ref(char_info.get("combo_ref", char_info.get("combo_name", "")))
+                combo_ref = self.to_combo_ref(char_info.get("combo_ref", ""))
                 out = dict(char_info)
                 out["name"] = self._character_name_from_record(char_id, char_info)
                 out["combo_ref"] = combo_ref
-                # Backward-compatible alias for existing call sites.
-                out["combo_name"] = combo_ref
                 return out
             return char_info
 

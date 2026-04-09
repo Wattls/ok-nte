@@ -3,14 +3,14 @@ from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout
 
 from qfluentwidgets import (BodyLabel, CardWidget, ComboBox, FluentIcon,
-                            ImageLabel, LineEdit, MessageBoxBase,
+                            ImageLabel, MessageBoxBase,
                             PrimaryPushButton, SubtitleLabel)
 
 from ok import og
 from ok.gui.widget.CustomTab import CustomTab
 from src.char.custom.CustomCharManager import CustomCharManager
 from src.tasks.trigger.AutoCombatTask import AutoCombatTask, scanner_signals
-from src.ui.common import char_manager_signals, cv_to_pixmap
+from src.ui.common import char_manager_signals, cv_to_pixmap, SearchableComboBox
 
 
 class NewCharDialog(MessageBoxBase):
@@ -20,7 +20,6 @@ class NewCharDialog(MessageBoxBase):
         self.manager = manager
         self.tr_title = og.app.tr("记录新特征")
         self.tr_name_ph = og.app.tr("输入或选择关联的角色名称")
-        self.tr_combo_ph = og.app.tr("或从已有角色中选择...")
         self.tr_list_ph = og.app.tr("选择绑定的出招表 (可选)")
 
         self.viewLayout.setSpacing(10)
@@ -30,24 +29,20 @@ class NewCharDialog(MessageBoxBase):
         img_label.setImage(cv_to_pixmap(mat).scaled(80, 80, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
         self.viewLayout.addWidget(img_label, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        self.name_input = LineEdit()
-        self.name_input.setPlaceholderText(self.tr_name_ph)
-        self.viewLayout.addWidget(self.name_input)
-
         # 提示现有的角色列表
         self.existing_chars = list(self.manager.get_all_characters().keys())
         # To do a simple dropdown for existing, combining ComboBox
-        self.char_combo = ComboBox()
-        self.char_combo.setPlaceholderText(self.tr_combo_ph)
+        self.char_combo = SearchableComboBox()
+        self.char_combo.setPlaceholderText(self.tr_name_ph)
         self.char_combo.addItems([""] + self.existing_chars)
         self.char_combo.currentTextChanged.connect(self._on_char_select)
         self.viewLayout.addWidget(self.char_combo)
 
-        self.combo_list = ComboBox()
+        self.combo_list = SearchableComboBox()
         self.combo_list.setPlaceholderText(self.tr_list_ph)
-        self.combo_list.addItem("", "")
+        self.combo_list.addItem("", userData="")
         for label, combo_ref in self.manager.get_all_combo_items():
-            self.combo_list.addItem(label, combo_ref)
+            self.combo_list.addItem(label, userData=combo_ref)
         self.viewLayout.addWidget(self.combo_list)
 
         self.widget.setMinimumWidth(320)
@@ -55,10 +50,10 @@ class NewCharDialog(MessageBoxBase):
     def _on_char_select(self, text):
         if not text:
             return
-        self.name_input.setText(text)
         char_info = self.manager.get_character_info(text)
-        if isinstance(char_info, dict) and char_info.get("combo_name"):
-            combo_ref = self.manager.to_combo_ref(char_info.get("combo_name"))
+        combo_value = char_info.get("combo_ref", "") if isinstance(char_info, dict) else ""
+        if combo_value:
+            combo_ref = self.manager.to_combo_ref(combo_value)
             idx = self.combo_list.findData(combo_ref)
             if idx >= 0:
                 self.combo_list.setCurrentIndex(idx)
@@ -68,7 +63,7 @@ class NewCharDialog(MessageBoxBase):
             self.combo_list.setCurrentIndex(0)
 
     def get_data(self):
-        char_name = self.name_input.text().strip()
+        char_name = self.char_combo.currentText().strip()
         combo_text = self.combo_list.currentText().strip()
         combo_name = self.manager.to_combo_ref(combo_text)
         idx = self.combo_list.currentIndex()
