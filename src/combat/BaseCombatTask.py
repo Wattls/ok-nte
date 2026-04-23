@@ -641,22 +641,11 @@ class BaseCombatTask(CombatCheck):
         return False
 
     def load_chars_element(self, count=4) -> List[Element]:
-
-        def processor(image):
-            image = iu.binarize_bgr_by_adaptive_center(image)
-            image = iu.blackout_corners_by_circle(image)
-            return image
+        def preprocess_image(image):
+            return iu.binarize_bgr_by_adaptive_center(image)
 
         results = []
-        to_find = [
-            Labels.blue_element,
-            Labels.green_element,
-            Labels.red_element,
-            Labels.purple_element,
-            Labels.yellow_element,
-            Labels.white_element,
-        ]
-        elements = [
+        target_elements = [
             Element.BLUE,
             Element.GREEN,
             Element.RED,
@@ -664,61 +653,55 @@ class BaseCombatTask(CombatCheck):
             Element.YELLOW,
             Element.WHITE,
         ]
-        first_box = self.box_of_screen_scaled(
+
+        base_box = self.box_of_screen_scaled(
             2560, 1440, 2438, 335, width_original=29, height_original=29
         )
 
-        orb = ORB(n_keypoints=100)
+        ref_img = cv2.imread(f"assets/esper_icons/{Element.BLUE.value}.png")
+        standard_size = (ref_img.shape[1], ref_img.shape[0])
 
-        sample_img = first_box.crop_frame(self.frame)
-        target_size = (sample_img.shape[1] * 4, sample_img.shape[0] * 4)
+        processed_templates = {}
+        for element in target_elements:
+            raw_template = cv2.imread(
+                f"assets/esper_icons/{element.value}.png", cv2.IMREAD_UNCHANGED
+            )
+            raw_template[raw_template[:, :, 3] == 0] = [0, 0, 0, 0]
+            template_bin = preprocess_image(raw_template[:, :, :3])
 
-        precomputed_descriptors = {}
-        for label in to_find:
-            feature = self.get_feature_by_name(label).mat
-            feature_gray = cv2.cvtColor(feature, cv2.COLOR_BGR2GRAY)
-            feature_gray = cv2.resize(feature_gray, target_size, interpolation=cv2.INTER_NEAREST)
-            try:
-                orb.detect_and_extract(feature_gray)
-                precomputed_descriptors[label] = orb.descriptors
-            except RuntimeError:
-                precomputed_descriptors[label] = None
+            _, mask = cv2.threshold(template_bin, 127, 255, cv2.THRESH_BINARY)
+            processed_templates[element] = (template_bin, mask)
+
+        vertical_spacing = int(self.height * 176 / 1440)
 
         for i in range(count):
-            box = first_box.copy(y_offset=int(self.height * 176 / 1440 * i))
-            img = processor(box.crop_frame(self.frame))
-            img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            img_gray = cv2.resize(img_gray, target_size, interpolation=cv2.INTER_NEAREST)
-            # display_image(img_gray, f'char_{i+1}_element_gray')
+            current_box = base_box.copy(y_offset=vertical_spacing * i)
 
-            try:
-                orb.detect_and_extract(img_gray)
-                img_descriptors = orb.descriptors
-            except RuntimeError:
-                img_descriptors = None
+            crop_img = preprocess_image(current_box.crop_frame(self.frame))
+            crop_resized = cv2.resize(crop_img, standard_size, interpolation=cv2.INTER_NEAREST)
 
             best_element = Element.DEFAULT
-            max_matches = -1
+            max_score = -1.0
 
-            for idx, label in enumerate(to_find):
-                feat_descriptors = precomputed_descriptors[label]
+            for element in target_elements:
+                template_img, template_mask = processed_templates[element]
 
-                num_matches = 0
-                if (
-                    img_descriptors is not None
-                    and feat_descriptors is not None
-                    and len(img_descriptors) > 0
-                    and len(feat_descriptors) > 0
-                ):
-                    matches = match_descriptors(img_descriptors, feat_descriptors, cross_check=True)
-                    num_matches = len(matches)
+                match_score = 0
+                if crop_resized is not None and template_img is not None:
+                    res = cv2.matchTemplate(
+                        crop_resized, template_img, cv2.TM_CCORR_NORMED, mask=template_mask
+                    )
+                    _, match_score, _, _ = cv2.minMaxLoc(res)
 
-                if num_matches > max_matches:
-                    max_matches = num_matches
-                    best_element = elements[idx]
+                if match_score > max_score:
+                    max_score = match_score
+                    best_element = element
 
             results.append(best_element)
-            self.log_debug(f"char_{i + 1}_element {best_element.name} with {max_matches} matches")
+            self.log_debug(
+                f"char_{i + 1} identified as {best_element.name} (score: {max_score:.4f})"
+            )
+
         return results
 
     def is_cycle_full(self) -> bool:

@@ -19,8 +19,9 @@ class BaseNTETask(BaseTask):
 
     def is_in_team(self):
         box = self.get_box_by_name(Labels.health_bar_slash)
-        find_box = box.copy(-box.width, width_offset=box.width * 1.5)
-        box = self.find_one(Labels.health_bar_slash, box=find_box, mask_function=iu.mask_corners)
+        find_box = box.copy(-box.width, width_offset=box.width * 2)
+        box = self.find_one(Labels.health_bar_slash, box=find_box,
+                            mask_function=iu.mask_corners)
         result = box is not None
         # self.log_debug(f"is_in_team {box}")
         return result

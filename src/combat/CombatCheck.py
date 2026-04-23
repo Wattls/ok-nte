@@ -105,13 +105,19 @@ class CombatCheck(BaseNTETask):
         return False
 
     def _find_red_health_bar(self):
-        min_height = self.height_of_screen(7 / 2160)
-        min_width = self.width_of_screen(100 / 3840)
-        max_height = min_height * 2
-        max_width = self.width_of_screen(200 / 3840)
+        min_height = self.height_of_screen(5 / 1440)
+        min_width = self.width_of_screen(100 / 2560)
+        max_height = min_height * 2.5
+        max_width = self.width_of_screen(200 / 2560)
 
         boxes = find_color_rectangles(
-            self.frame, enemy_health_color_red, min_width, min_height, max_width, max_height
+            self.frame,
+            enemy_health_color_red,
+            min_width,
+            min_height,
+            max_width,
+            max_height,
+            box=self.box_of_screen(0.1543, 0.1021, 0.9070, 0.8458),
         )
 
         if len(boxes) > 0:
@@ -303,9 +309,9 @@ class CombatCheck(BaseNTETask):
 
 
 enemy_health_color_red = {
-    "r": (220, 255),
-    "g": (25, 40),
-    "b": (25, 40),
+    "r": (210, 255),
+    "g": (20, 80),
+    "b": (20, 100),
 }
 
 boss_health_color = {

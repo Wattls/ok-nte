@@ -9,7 +9,7 @@ def isolate_cd_to_black(cv_image):
     return create_color_mask(cv_image, text_white_color, invert=True)
 
 
-def binarize_bgr_by_brightness(image, threshold=180):
+def binarize_bgr_by_brightness(image, threshold=180, binary=False):
     """
     根据亮度阈值对 BGR 图像进行二值化，并返回 BGR 格式的结果。
 
@@ -21,6 +21,8 @@ def binarize_bgr_by_brightness(image, threshold=180):
     """
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     _, binary_gray = cv2.threshold(gray, threshold, 255, cv2.THRESH_BINARY)
+    if binary:
+        return binary_gray
     binary_bgr = cv2.cvtColor(binary_gray, cv2.COLOR_GRAY2BGR)
 
     return binary_bgr
