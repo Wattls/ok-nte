@@ -5,8 +5,8 @@ description = "An image-recognition-based automation tool for Neverness To Evern
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "ok-script>=1.0.106",
-    "onnxocr-ppocrv5>=0.0.14",
+    "ok-script>=1.0.107",
+    "onnxocr-ppocrv5>=0.0.15",
     "opencc>=1.2.0",
     "opencv-python>=4.13.0.92",
     "openvino>=2026.1.0",
