@@ -10,7 +10,7 @@ logger = Logger.get_logger(__name__)
 class SkipDialogTask(TriggerTask, BaseNTETask):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.default_config = {"_enabled": True}
+        self.default_config = {"_enabled": False}
         self.confirm_dialog_checked = False
         self.has_eye_time = 0
         self.skip = None
@@ -30,14 +30,18 @@ class SkipDialogTask(TriggerTask, BaseNTETask):
             return
 
     def check_dialog_click(self):
-        if self.find_one(Labels.dialog_history, threshold=0.8, box=self.default_box.dialog_icon_box):
+        if self.find_one(
+            Labels.dialog_history, threshold=0.8, box=self.default_box.dialog_icon_box
+        ):
             if result := self.find_one(Labels.dialog_click, threshold=0.8, vertical_variance=0.02):
                 self.click(result, after_sleep=0.1)
                 return True
 
     def skip_message(self):
         if self.find_one(Labels.message):
-            if message_dialog := self.find_one(Labels.message_dialog, vertical_variance=0.2, horizontal_variance=0.01):
+            if message_dialog := self.find_one(
+                Labels.message_dialog, vertical_variance=0.2, horizontal_variance=0.01
+            ):
                 self.click(message_dialog)
                 self.log_info(f"click {message_dialog}")
             # else:
@@ -70,7 +74,10 @@ class SkipDialogTask(TriggerTask, BaseNTETask):
 
     def find_skip(self):
         return self.find_one(
-            Labels.skip_dialog, horizontal_variance=0.02, threshold=0.75, frame_processor=iu.isolate_dialog_to_white
+            Labels.skip_dialog,
+            horizontal_variance=0.02,
+            threshold=0.75,
+            frame_processor=iu.isolate_dialog_to_white,
         )
 
     def try_click_skip(self):
