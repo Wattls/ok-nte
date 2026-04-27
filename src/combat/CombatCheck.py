@@ -243,7 +243,7 @@ class CombatCheck(BaseNTETask):
         利用屏幕比例动态收缩范围 + 智能颜色遮罩剔除背景杂讯
         """
         if frame is None:
-            frame = self.frame.copy()
+            frame = self.frame
         ratio = self.height / 1440.0
 
         dynamic_scales = set()
@@ -361,7 +361,7 @@ class CombatCheck(BaseNTETask):
             return ret
         if self.combat_detect_future is None:
             self.logger.info("combat_detect_future submit")
-            frame = self.frame.copy()
+            frame = self.frame
             self.combat_detect_future = self.thread_pool_executor.submit(
                 self._async_combat_detect, frame=frame
             )

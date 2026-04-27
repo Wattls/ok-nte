@@ -134,7 +134,7 @@ class BaseNTETask(BaseTask):
 
         base_feature = self.get_feature_by_name(Labels.is_current_char)
         base_box = self.get_box_by_name(Labels.is_current_char)
-        _frame = self.frame.copy()
+        _frame = self.frame
         best_ret = 999
         idx = -1
         template_cnt = get_img_contour(base_feature.mat)
@@ -187,7 +187,7 @@ class BaseNTETask(BaseTask):
         return results
 
     def in_world(self) -> bool:
-        frame = self.frame.copy()
+        frame = self.frame
         if self.arrow_contour["shape"] != frame.shape[:2]:
             template_bgr = self.get_feature_by_name(Labels.mini_map_arrow).mat
             t_bin = template_bgr[:, :, 0]

@@ -698,7 +698,7 @@ class BaseCombatTask(CombatCheck):
                     # iu.show_images([mask], [f"mask_{element}"])
                     self._element_template_cache[element] = (raw_template, mask)
 
-        _frame = self.frame.copy()
+        _frame = self.frame
         # self.screenshot("load_chars_element", _frame)
 
         for i in range(count):
@@ -810,10 +810,10 @@ class BaseCombatTask(CombatCheck):
             return img1, img2
 
         confidence = 1
-        frame = self.frame.copy()
+        _frame = self.frame
         feature_name = f"char_{index + 1}_text"
         box = self.get_box_by_name(feature_name)
-        current_mat = box.crop_frame(frame)
+        current_mat = box.crop_frame(_frame)
         if reset_char_slot:
             self.chars_slot_mat[index] = None
         if self.chars_slot_mat[index] is not None:
