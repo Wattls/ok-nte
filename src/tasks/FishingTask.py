@@ -341,7 +341,7 @@ class FishingTask(BaseNTETask):
         box = self.box_of_screen(*self.BITE_INDICATOR_BOX, name="fishing_bite_indicator")
         image = box.crop_frame(self.frame)
 
-        blue_mask = iu.create_color_mask(image, fishing_bite_blue_color, gray=True)
+        blue_mask = iu.create_color_mask(image, fishing_bite_blue_color, binary=True)
 
         h, w = blue_mask.shape[:2]
         center = (w // 2, h // 2)

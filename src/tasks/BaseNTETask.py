@@ -14,6 +14,7 @@ from ok import BaseTask, Box, Logger, og, safe_get
 from src.Labels import Labels
 from src.scene.NTEScene import NTEScene
 from src.scene.ScreenPosition import ScreenPosition
+from src.utils import game_filters as gf
 from src.utils import image_utils as iu
 
 logger = Logger.get_logger(__name__)
@@ -139,7 +140,7 @@ class BaseNTETask(BaseTask):
         template_cnt = get_img_contour(base_feature.mat)
         for i in range(4):
             box = self.get_box_by_char_spacing(base_box, i)
-            current_mat = iu.current_char_filter(box.crop_frame(_frame))
+            current_mat = gf.current_char_filter(box.crop_frame(_frame))
             current_cnt = get_img_contour(current_mat)
             if current_cnt is None:
                 continue
@@ -360,7 +361,7 @@ class BaseNTETask(BaseTask):
 
 
 def interactable_mask(image):
-    mask = iu.create_color_mask(image, interac_pink_color, gray=True)
+    mask = iu.create_color_mask(image, interac_pink_color, binary=True)
     kernel = np.ones((3, 3), np.uint8)
     dilated_mask = cv2.dilate(mask, kernel, iterations=1)
     return dilated_mask

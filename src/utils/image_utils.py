@@ -5,35 +5,6 @@ import cv2
 import numpy as np
 
 from ok import color_range_to_bound
-from src import text_white_color
-
-dialog_white_color = {
-    "r": (220, 240),  # Red range
-    "g": (220, 240),  # Green range
-    "b": (220, 240),  # Blue range
-}
-
-lv_white_color = {
-    "r": (210, 255),  # Red range
-    "g": (210, 255),  # Green range
-    "b": (210, 255),  # Blue range
-}
-
-
-def isolate_cd_to_black(cv_image):
-    return create_color_mask(cv_image, text_white_color, invert=True)
-
-
-def isolate_lv_to_black(cv_image):
-    return create_color_mask(cv_image, lv_white_color, invert=True)
-
-
-def isolate_dialog_to_white(cv_image):
-    return create_color_mask(cv_image, dialog_white_color, invert=False)
-
-
-def current_char_filter(cv_image):
-    return filter_by_hsv(cv_image, HSVRange((150, 170, 165), (179, 255, 255)), gray=True)
 
 
 def binarize_bgr_by_brightness(image, threshold=180, binary=False):
@@ -224,7 +195,7 @@ def mask_outside_white_rect(image):
 
 
 def create_color_mask(
-    cv_image: np.ndarray, color_range, invert: bool = False, gray: bool = False
+    cv_image: np.ndarray, color_range, invert: bool = False, binary: bool = False
 ) -> np.ndarray:
     """
     根据指定颜色范围生成3通道BGR掩码图.
@@ -233,17 +204,17 @@ def create_color_mask(
         cv_image (np.ndarray): 输入的OpenCV图像.
         color_range (Any): 目标颜色范围.
         invert (bool): 是否反转掩码, 默认为False.
-        gray (bool): 是否返回灰度图, 默认为False.
+        binary (bool): 是否返回单通道二值图(掩码), 默认为False.
 
     Returns:
-        np.ndarray: 3通道BGR掩码图(匹配区为白, 非匹配区为黑).
+        np.ndarray: 3通道BGR掩码图(匹配区为白, 非匹配区为黑)或单通道二值掩码图.
     """
     lower_bound, upper_bound = color_range_to_bound(color_range)
 
     match_mask = cv2.inRange(cv_image, lower_bound, upper_bound)
     if invert:
         match_mask = cv2.bitwise_not(match_mask)
-    if gray:
+    if binary:
         return match_mask
     output_image = cv2.cvtColor(match_mask, cv2.COLOR_GRAY2BGR)
 
@@ -299,10 +270,10 @@ class HSVRange:
         self.upper = np.array(upper_clipped, dtype=np.uint8)
 
 
-def filter_by_hsv(image, hsv_range: HSVRange, gray: bool = False):
+def filter_by_hsv(image, hsv_range: HSVRange, binary: bool = False):
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     match_mask = cv2.inRange(hsv, hsv_range.lower, hsv_range.upper)
-    if gray:
+    if binary:
         return match_mask
     return cv2.bitwise_and(image, image, mask=match_mask)
 

@@ -13,6 +13,7 @@ from src.char.CharFactory import get_char_by_name, get_char_by_pos
 from src.char.custom.CustomCharManager import CustomCharManager
 from src.char.Healer import Healer
 from src.combat.CombatCheck import CombatCheck
+from src.utils import game_filters as gf
 from src.utils import image_utils as iu
 
 if TYPE_CHECKING:
@@ -225,7 +226,7 @@ class BaseCombatTask(CombatCheck):
         cds["skill"] = 0
         cds["ultimate"] = 0
         texts = self.ocr(
-            0.8594, 0.8847, 0.9578, 0.9139, frame_processor=iu.isolate_cd_to_black, match=cd_regex
+            0.8594, 0.8847, 0.9578, 0.9139, frame_processor=gf.isolate_cd_to_black, match=cd_regex
         )
         for text in texts:
             cd = convert_cd(text)
