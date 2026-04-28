@@ -301,3 +301,21 @@ def adjust_lightness_contrast_lab(img, brightness=0, contrast=0):
     lightness = cv2.LUT(lightness, lut)
     result_lab = cv2.merge((lightness, a, b))
     return cv2.cvtColor(result_lab, cv2.COLOR_Lab2BGR)
+
+def dilate_mask(mask: np.ndarray, kernel_size: int = 3, to_bgr: bool = True) -> np.ndarray:
+    """
+    对遮罩（二值图像）进行膨胀处理。
+
+    Args:
+        mask (np.ndarray): 输入的二值遮罩图像.
+        kernel_size (int): 膨胀核的大小, 默认为 3.
+        to_bgr (bool): 是否将结果转换为 BGR 3通道格式, 默认为 True.
+
+    Returns:
+        np.ndarray: 膨胀后的遮罩图像 (3通道BGR或单通道二值图).
+    """
+    kernel = np.ones((kernel_size, kernel_size), np.uint8)
+    dilated = cv2.dilate(mask, kernel, iterations=1)
+    if to_bgr and len(dilated.shape) == 2:
+        dilated = cv2.cvtColor(dilated, cv2.COLOR_GRAY2BGR)
+    return dilated
