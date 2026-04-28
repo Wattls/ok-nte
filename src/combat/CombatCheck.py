@@ -92,8 +92,8 @@ class CombatCheck(BaseNTETask):
                 logger.info(f"target lost try retarget {self.target_enemy_time_out}")
                 start = time.time()
                 while time.time() - start < self.target_enemy_time_out:
-                    self.middle_click(interval=0.5)
-                    if self.combat_detect() is True:
+                    self.middle_click(interval=0.4)
+                    if self.combat_detect()[0] is True:
                         return True
                     self.next_frame()
 
@@ -177,7 +177,7 @@ class CombatCheck(BaseNTETask):
             #     return self.scene.set_in_combat()
             if self.combat_end_condition is not None and self.combat_end_condition():
                 return self.reset_to_false(reason="end condition reached")
-            combat_detect = self.combat_detect()
+            combat_detect = self.async_combat_detect()
             if combat_detect is None or combat_detect is True:
                 return self.scene.set_in_combat()
             if self.target_enemy(wait=True):
@@ -339,7 +339,9 @@ class CombatCheck(BaseNTETask):
         else:
             return None, None, None
 
-    def _async_combat_detect(self, frame):
+    def combat_detect(self, frame=None):
+        if frame is None:
+            frame = self.frame
         if self.has_target(frame=frame):
             return True, "target"
         if self.ocr(
@@ -353,7 +355,7 @@ class CombatCheck(BaseNTETask):
             return True, "lv"
         return False, None
 
-    def combat_detect(self):
+    def async_combat_detect(self):
         if self.combat_detect_future and self.combat_detect_future.done():
             ret, reason = self.combat_detect_future.result()
             self.combat_detect_future = None
@@ -363,7 +365,7 @@ class CombatCheck(BaseNTETask):
             self.logger.info("combat_detect_future submit")
             frame = self.frame
             self.combat_detect_future = self.thread_pool_executor.submit(
-                self._async_combat_detect, frame=frame
+                self.combat_detect, frame=frame
             )
         return None
 

@@ -1,7 +1,7 @@
 import ctypes
-import inspect
 import time
 from concurrent.futures import ThreadPoolExecutor
+from typing import Any, List, overload
 
 import cv2
 import numpy as np
@@ -40,22 +40,28 @@ class BaseNTETask(BaseTask):
     def main_viewport(self):
         return self.box_of_screen(0.1543, 0.1021, 0.9070, 0.8458)
 
+    @overload
+    def click(self, x: int | Box | List[Box] = -1, y=-1, move_back=False, name=None, interval=-1,
+              move=False, down_time=0.02, after_sleep=0, key='left', hcenter=False,
+              vcenter=False) -> Any:
+        ...
+
     def click(self, *args, **kwargs):
-        frame = inspect.currentframe()
-        caller_frame = frame.f_back
-        
-        if caller_frame and caller_frame.f_code.co_name == "click_box":
-            grand_frame = caller_frame.f_back
-            if grand_frame and grand_frame.f_code.co_name == "click":
-                if "original_move" in grand_frame.f_locals:
-                    kwargs["move"] = grand_frame.f_locals["original_move"]
-        original_move = kwargs.pop("move", False)
+        is_top_level = not hasattr(self, "_current_move")
 
-        if args and isinstance(args[0], (Box, list)):
-            return self.click_box(*args, **kwargs)
+        if is_top_level:
+            self._current_move = kwargs.get("move", False)
+        else:
+            kwargs["move"] = self._current_move
 
-        kwargs["move"] = original_move
-        return super().click(*args, **kwargs)
+        try:
+            if args and isinstance(args[0], (Box, list)):
+                return self.click_box(*args, **kwargs)
+
+            return super().click(*args, **kwargs)
+        finally:
+            if is_top_level:
+                delattr(self, "_current_move")
 
     def get_char_box(self, index: int):
         box = self.get_box_by_name(f"box_char_{index + 1}")
@@ -381,7 +387,7 @@ class BaseNTETask(BaseTask):
                     break
         if travel_btn:
             self.sleep(0.5)
-            self.click(travel_btn, after_sleep=1, move=True)
+            self.click(travel_btn, after_sleep=1, move=True, down_time=0.01)
             return True
         return False
 
