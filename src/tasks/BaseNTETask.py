@@ -21,6 +21,8 @@ logger = Logger.get_logger(__name__)
 
 
 class BaseNTETask(BaseTask):
+    DEFAULT_MOVE = False
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.scene: NTEScene | None = None
@@ -50,14 +52,11 @@ class BaseNTETask(BaseTask):
         is_top_level = not hasattr(self, "_current_move")
 
         if is_top_level:
-            self._current_move = kwargs.get("move", False)
+            self._current_move = kwargs.get("move", self.DEFAULT_MOVE)
         else:
             kwargs["move"] = self._current_move
 
         try:
-            if args and isinstance(args[0], (Box, list)):
-                return self.click_box(*args, **kwargs)
-
             return super().click(*args, **kwargs)
         finally:
             if is_top_level:
@@ -366,7 +365,7 @@ class BaseNTETask(BaseTask):
             Labels.interactable,
             box=self.interac_box,
             threshold=0.7,
-            mask_function=interactable_mask,
+            mask_function=interac_mask,
         )
 
     def walk_until_find_interac(self, time_out=10, raise_if_not_found=False):
@@ -392,7 +391,7 @@ class BaseNTETask(BaseTask):
         return False
 
 
-def interactable_mask(image):
+def interac_mask(image):
     mask = iu.create_color_mask(image, interac_pink_color, binary=True)
     kernel = np.ones((3, 3), np.uint8)
     dilated_mask = cv2.dilate(mask, kernel, iterations=1)

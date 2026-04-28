@@ -12,7 +12,7 @@ from src.utils import image_utils as iu
 
 
 class FishingTask(BaseNTETask):
-    # 1080p 固定参数（“循环次数”“方向反转”开放配置）
+    DEFAULT_MOVE = True
     BAR_BOX = (0.3164, 0.0646, 0.6875, 0.0743)
     BITE_INDICATOR_BOX = (0.9023, 0.8562, 0.9488, 0.9403)
     START_FISHING_BOX = (0.9102, 0.8743, 0.9387, 0.9271)
@@ -39,10 +39,6 @@ class FishingTask(BaseNTETask):
         self._last_bar_log_time = 0.0
         self._morph_kernel = np.ones((3, 3), dtype=np.uint8)
         self._bar_active_key = None
-
-    def click(self, *args, **kwargs):
-        kwargs.setdefault("move", True)
-        return super().click(*args, **kwargs)
 
     def run(self):
         NTEOneTimeTask.run(self)
