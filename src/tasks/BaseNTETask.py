@@ -167,6 +167,8 @@ class BaseNTETask(BaseTask):
             return 1.0
             
         base_box = self.get_box_by_name(Labels.is_current_char)
+        if self.char_ui_offset:
+            base_box = self.shift_char_ui_box(base_box)
         box = self.get_box_by_char_spacing(base_box, index)
         # self.draw_boxes(boxes=box, color="blue")
         

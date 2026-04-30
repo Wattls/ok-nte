@@ -8,28 +8,19 @@ from ok.test.TaskTestCase import TaskTestCase
 from src.combat.CombatCheck import CombatCheck
 
 
-class TestHealthBar(TaskTestCase):
+class TestOcrLv(TaskTestCase):
     task_class = CombatCheck
 
     config = config
 
-    def test_enemy_health(self):
+    def test_enemy_lv_text(self):
         # Create a BattleReport object
         self.set_image('tests/images/03.png')
-        result = self.task.has_health_bar()
-        self.logger.info(f'enemy_health: {result}')
-        self.assertEqual(result, True)
+        result = self.task.find_lv()
+        self.logger.info(f'enemy_lv_text: {result}')
+        self.assertEqual(len(result), 2)
         # time.sleep(1)
         # self.task.screenshot('enemy_health', show_box=True)
-
-    def test_boss_health(self):
-        # Create a BattleReport object
-        self.set_image('tests/images/04.png')
-        result = self.task.has_health_bar()
-        self.logger.info(f'test boss_health: {result}')
-        self.assertEqual(result, True)
-        # time.sleep(1)
-        # self.task.screenshot('boss_health', show_box=True)
 
     def test_boss_lv_text(self):
         self.set_image('tests/images/04.png')

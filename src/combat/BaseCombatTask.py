@@ -408,7 +408,7 @@ class BaseCombatTask(CombatCheck):
             self.check_combat()
             current_time = time.time()
 
-            is_char_switched = self.is_char_at_index(switch_to.index)
+            is_char_switched = self.is_char_at_index(switch_to.index, 1)
 
             if not is_char_switched:
                 self.click(interval=0.2)
