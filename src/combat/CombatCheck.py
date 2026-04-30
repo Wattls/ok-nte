@@ -107,7 +107,7 @@ class CombatCheck(BaseNTETask):
         if frame is None:
             frame = self.frame
         # 1. 提前 Crop
-        box = self.box_of_screen(0.2, 0.2, 0.8, 0.6389)
+        box = self.box_of_screen(0.2, 0.2, 0.8, 0.6715)
         roi = box.crop_frame(frame)
         self.draw_boxes("find_target", box, color="blue")
 
@@ -119,56 +119,75 @@ class CombatCheck(BaseNTETask):
         if target_feature is None:
             return None
         template_bgr = target_feature.mat
-
+        
+        # 4. 预处理：边缘图与二值图 (用于处理内核/空心图标并过滤杂讯)
+        roi_gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+        roi_edge = cv2.Canny(roi_gray, 50, 150)
+        _, roi_bin = cv2.threshold(roi_gray, 180, 255, cv2.THRESH_BINARY)
+        
+        # 提取模板的边缘特征
+        tpl_gray = cv2.cvtColor(template_bgr, cv2.COLOR_BGR2GRAY)
+        tpl_edge = cv2.Canny(tpl_gray, 50, 150)
+        
         best_res = None
-
-        # 4. 多尺度彩色模板匹配 (Color-Aware Template Matching)
-        # 采用更精细的缩放步长 (0.1)，确保能捕捉到远处的微小目标 (如 0.6 倍率的小图标)
-        for scale in np.arange(1, 0.2, -0.2):
+        
+        # 5. 多尺度搜索
+        for scale in np.arange(0.4, 1.5, 0.1):
             tw = int(template_bgr.shape[1] * scale)
             th = int(template_bgr.shape[0] * scale)
-            if tw < 10 or th < 10:
+            if tw < 12 or th < 12: continue
+            
+            tpl_bgr_scaled = cv2.resize(template_bgr, (tw, th))
+            tpl_edge_scaled = cv2.resize(tpl_edge, (tw, th))
+            
+            # 模式 A: 彩色匹配 (针对完整图标，置信度高)
+            res_c = cv2.matchTemplate(roi, tpl_bgr_scaled, cv2.TM_CCOEFF_NORMED)
+            _, max_val_c, _, max_loc_c = cv2.minMaxLoc(res_c)
+            
+            # 模式 B: 边缘匹配 (针对空心/只有内核的图标)
+            res_e = cv2.matchTemplate(roi_edge, tpl_edge_scaled, cv2.TM_CCOEFF_NORMED)
+            _, max_val_e, _, max_loc_e = cv2.minMaxLoc(res_e)
+            
+            # 挑选候选者
+            if max_val_c > 0.6:
+                tx, ty, score_base = max_loc_c[0], max_loc_c[1], max_val_c
+            elif max_val_e > 0.5:
+                # 边缘匹配作为兜底，门槛稍低，但后续对称性校验会更严
+                tx, ty, score_base = max_loc_e[0], max_loc_e[1], max_val_e
+            else:
                 continue
-            tpl_scaled = cv2.resize(template_bgr, (tw, th))
-
-            # 使用归一化相关系数匹配
-            res_map = cv2.matchTemplate(roi, tpl_scaled, cv2.TM_CCOEFF_NORMED)
-            _, max_val, _, max_loc = cv2.minMaxLoc(res_map)
-
-            # 严格色彩匹配门槛：必须 > 0.6 才能有效过滤纯白色特效
-            if max_val > 0.6:
-                tx, ty = max_loc
-
-                # 5. 二次校验：对称性校验
-                crop_bgr = roi[ty : ty + th, tx : tx + tw]
-                crop_gray = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2GRAY)
-                # 使用较宽容的二值化以保留小目标的轮廓特征
-                _, crop_bin = cv2.threshold(crop_gray, 180, 255, cv2.THRESH_BINARY)
-
-                white_count = cv2.countNonZero(crop_bin)
-                if white_count < 5:
-                    continue
-
-                h_sym = (
-                    cv2.countNonZero(cv2.bitwise_and(crop_bin, cv2.flip(crop_bin, 1))) / white_count
-                )
-                v_sym = (
-                    cv2.countNonZero(cv2.bitwise_and(crop_bin, cv2.flip(crop_bin, 0))) / white_count
-                )
-                sym_score = (h_sym + v_sym) / 2
-
-                # 综合加权评分：彩色特征 (2/3) + 几何对称性 (1/3)
-                score = (max_val * 2 + sym_score) / 3
-
-                if score > 0.55:
-                    if best_res is None or score > best_res["confidence"]:
-                        best_res = {
-                            "x": box.x + tx + tw // 2,
-                            "y": box.y + ty + th // 2,
-                            "w": tw,
-                            "h": th,
-                            "confidence": score,
-                        }
+                
+            # 6. 二次校验：几何特征
+            crop_bin = roi_bin[ty:ty+th, tx:tx+tw]
+            white_count = cv2.countNonZero(crop_bin)
+            if white_count < 5: continue
+            
+            # 对称性：菱形图标的核心属性
+            h_sym = cv2.countNonZero(cv2.bitwise_and(crop_bin, cv2.flip(crop_bin, 1))) / white_count
+            v_sym = cv2.countNonZero(cv2.bitwise_and(crop_bin, cv2.flip(crop_bin, 0))) / white_count
+            sym_score = (h_sym + v_sym) / 2
+            
+            # 孤立性：真正的 UI 图标周围应该有空隙，粒子特效通常成堆出现
+            pad = 5
+            if ty >= pad and tx >= pad and ty + th + pad < roi.shape[0] and tx + tw + pad < roi.shape[1]:
+                outer_bin = roi_bin[ty-pad:ty+th+pad, tx-pad:tx+tw+pad]
+                outer_white = cv2.countNonZero(outer_bin)
+                iso_score = white_count / outer_white if outer_white > 0 else 0
+            else:
+                iso_score = 0.7
+                
+            # 综合评分：彩色/边缘得分 (2) + 对称性 (2) + 孤立性 (1)
+            score = (score_base * 2 + sym_score * 2 + iso_score) / 5
+            
+            if score > 0.6:
+                if best_res is None or score > best_res['confidence']:
+                    best_res = {
+                        'x': box.x + tx + tw // 2,
+                        'y': box.y + ty + th // 2,
+                        'w': tw,
+                        'h': th,
+                        'confidence': score
+                    }
 
         if best_res:
             result_box = Box(
