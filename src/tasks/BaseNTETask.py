@@ -133,7 +133,7 @@ class BaseNTETask(BaseTask):
         return True, current, exist_count + 1
 
     def update_char_ui_offset(self):
-        now = time.time()
+        # now = time.time()
         arr = self.multi_stage_char_match()
         results = [
             c.x < self.get_char_text_box(idx).x for idx, c in enumerate(arr) if c is not None
@@ -143,7 +143,7 @@ class BaseNTETask(BaseTask):
             self.char_ui_offset = sum(results) > (len(results) / 2)
         else:
             self.char_ui_offset = False
-        logger.debug(f"update_char_ui_offset cost {time.time() - now:.3f}")
+        # logger.debug(f"update_char_ui_offset cost {time.time() - now:.3f}")
         return arr
 
     @property

@@ -88,21 +88,18 @@ class CombatCheck(BaseNTETask):
         is_boss = self.find_one(Labels.boss_lv_text, box=box, frame_processor=filter)
         return bool(is_boss)
 
-    def target_enemy(self, wait=True):
+    def target_enemy(self, wait=True, lv=True):
         if not wait:
             self.middle_click()
         else:
-            if self.has_target():
-                return True
-            else:
-                logger.info(f"target lost try retarget {self.target_enemy_time_out}")
-                start = time.time()
-                while time.time() - start < self.target_enemy_time_out:
-                    self.middle_click()
-                    self.sleep(0.2)
-                    if self.combat_detect()[0] is True:
-                        return True
-                    self.next_frame()
+            logger.info(f"targeting enemy for {self.target_enemy_time_out}s")
+            deadline = time.time() + self.target_enemy_time_out
+            while time.time() < deadline:
+                self.middle_click()
+                self.sleep(0.2)
+                if self.combat_detect(lv=lv)[0] is True:
+                    return True
+                self.next_frame()
 
     def has_target(self, frame=None):
         # now = time.perf_counter()
@@ -336,8 +333,8 @@ class CombatCheck(BaseNTETask):
                 return self.scene.set_in_combat()
             else:
                 if self._combat_detect_settle is None:
-                    self._combat_detect_settle = time.time()
-                if time.time() - self._combat_detect_settle < 1:
+                    self._combat_detect_settle = time.time() + 1
+                if self._combat_detect_settle > time.time():
                     return self.scene.set_in_combat()
 
             if self.target_enemy(wait=True):
@@ -350,6 +347,7 @@ class CombatCheck(BaseNTETask):
         else:
             from src.tasks.trigger.AutoCombatTask import AutoCombatTask
 
+            # now = time.time()
             has_target = self.async_combat_detect(target=True, lv=False)
             if not has_target and target:
                 self.log_debug("try target")
@@ -360,9 +358,10 @@ class CombatCheck(BaseNTETask):
 
             in_combat = (is_boss or has_lv) and (is_auto or has_target)
             if in_combat:
-                if not has_target and not self.target_enemy(wait=True):
+                # self.log_info(f"enter combat cost1 {time.time() - now}")
+                if not has_target and not self.target_enemy(wait=True, lv=False):
                     return False
-                self.log_info("enter combat")
+                # self.log_info(f"enter combat cost2 {time.time() - now}")
                 self._in_combat = self.load_chars()
                 return self._in_combat
 
