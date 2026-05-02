@@ -81,8 +81,7 @@ class BaseNTETask(BaseTask):
 
         if is_top_level:
             self._current_move = kwargs.get("move", self.DEFAULT_MOVE)
-        else:
-            kwargs["move"] = self._current_move
+        kwargs["move"] = self._current_move
 
         try:
             return super().click(*args, **kwargs)
