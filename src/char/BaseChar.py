@@ -119,10 +119,7 @@ class BaseChar:
         return False
 
     def perform(self):
-        from src.sound_trigger.SoundCombatContext import SoundCombatContext
-        if SoundCombatContext.should_interrupt_combat():
-            self.task.log_info("Combat perform interrupted by sound action")
-            SoundCombatContext.wait_for_sound_action_complete(timeout=1.0)
+        """执行当前角色的主要战斗行动序列。"""
         self.last_perform = time.time()
         if self.need_fast_perform():
             self.do_fast_perform()
@@ -225,22 +222,8 @@ class BaseChar:
     def sleep(self, sec, check_combat=True):
         if not check_combat:
             self.task.skip_combat_check = True
-        self._interruptible_sleep(sec)
+        self.task.sleep(sec)
         self.task.skip_combat_check = False
-
-    def _interruptible_sleep(self, sec):
-        import time
-        from src.sound_trigger.SoundCombatContext import SoundCombatContext
-        end_time = time.time() + sec
-        while time.time() < end_time:
-            if SoundCombatContext.should_interrupt_combat():
-                self.task.log_info("Combat sleep interrupted by sound action")
-                remaining = end_time - time.time()
-                SoundCombatContext.wait_for_sound_action_complete(timeout=remaining + 0.3)
-                break
-            sleep_interval = min(0.02, end_time - time.time())
-            if sleep_interval > 0:
-                time.sleep(sleep_interval)
 
     def alert_skill_failed(self):
         self.task.log_error(
