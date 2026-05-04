@@ -2,7 +2,7 @@ import time
 
 import cv2
 import numpy as np
-from ok import TaskDisabledException
+from ok import Box, TaskDisabledException
 from qfluentwidgets import FluentIcon
 
 from src.Labels import Labels
@@ -107,7 +107,7 @@ class FishingTask(BaseNTETask):
     def enter_fishing_scene(self) -> bool:
         """检测并进入钓鱼准备界面"""
         ENTER_SCENE_TIMEOUT = 5
-        if self.is_fish_start_exist():
+        if self.is_fish_start_exist() or self.is_success_overlay():
             self.log_info("已在钓鱼准备界面")
             return True
         
@@ -467,6 +467,40 @@ class FishingTask(BaseNTETask):
 
         return blue_pixels_ratio > 0.07
 
+    def find_default_bait(self):
+        box = self.box_of_screen(0.0602, 0.2306, 0.2070, 0.2597)
+        image = box.crop_frame(self.frame)
+        mask = iu.create_color_mask(image, default_bait_color, to_bgr=False)
+        mask = iu.morphology_mask(mask, closing=True, to_bgr=False)
+        num_labels, _, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
+        if num_labels <= 1:
+            return None
+        max_i = max(enumerate(stats[1:, cv2.CC_STAT_AREA]), key=lambda x: x[1])[0] + 1
+        x = stats[max_i, cv2.CC_STAT_LEFT]
+        y = stats[max_i, cv2.CC_STAT_TOP]
+        w = stats[max_i, cv2.CC_STAT_WIDTH]
+        h = stats[max_i, cv2.CC_STAT_HEIGHT]
+        return Box(box.x + x, box.y + y, w, h, name="default_bait")
+
+    def click_default_bait(self):
+        box = self.find_default_bait()
+        if box:
+            self.operate_click(box)
+            return
+        self.operate_click(0.0758, 0.2236)
+
+    def buy_bait(self):
+        self.click_default_bait()
+        self.sleep(0.25)
+        # self.operate_click(0.9520, 0.8812) #拉满数量
+        self.sleep(0.25)
+        self.operate_click(0.8715, 0.9542) #确认购买
+        self.sleep(1)
+        self.back_to_fishing_scene()
+
+    def back_to_fishing_scene(self):
+        self.wait_until(self.is_fish_start_exist, post_action=lambda: self.back(interval=1))
+
 
 fishing_bite_blue_color = {
     "r": (30, 35),
@@ -484,4 +518,10 @@ text_black_color = {
     "r": (0, 10),
     "g": (0, 10),
     "b": (0, 10),
+}
+
+default_bait_color = {
+    "r": (147, 255),
+    "g": (47, 133),
+    "b": (104, 184),
 }
