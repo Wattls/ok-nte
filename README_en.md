@@ -33,8 +33,19 @@ All issues and consequences arising from the use of this software are not relate
 
 ## ✨ Main Features
 
-*   **Background Operation**
-    *   Supports automation while the PC game is running in the background
+<p align="center">
+  <img src="assets/demo_en.gif" width="950" alt="demo">
+</p>
+
+- **Background Operation**: Automate game actions while in the background.
+- **Auto Fishing**: Fully automated fishing process.
+- **Auto Combat**: Computer vision-based combat algorithm.
+- **Skip Dialog**: Rapidly skip through story dialogs.
+- **Fast Travel**: Automatic map teleportation.
+- **Character Center**
+  - **Character Management**: Supports custom combo lists.
+  - **Feature Management**: Adapts to different character skins.
+- **Audio Driven**: Auto dodge and counter based on audio feedback.
 
 ## 🖥️ System Requirements & Compatibility
 

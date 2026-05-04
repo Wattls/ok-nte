@@ -519,7 +519,7 @@ class CombatCheck(BaseNTETask):
 
         return False
 
-    def find_lv(self, frame=None):
+    def find_lv(self, frame=None, threshold=0.7):
         if not self._init_lv_templates():
             return []
 
@@ -557,11 +557,14 @@ class CombatCheck(BaseNTETask):
                 and abs(cx - self._lv_feat_L[1]) < 0.15
                 and abs(cy - self._lv_feat_L[2]) < 0.15
             ):
+                L_dist_threshold = 3.0
                 dist = cv2.matchShapes(self._lv_cnt_L, cnt, cv2.CONTOURS_MATCH_I3, 0)
                 if (
                     self._lv_aspect_L * 0.6 < aspect_ratio < self._lv_aspect_L * 1.5
-                ) and dist < 3.0:
-                    L_candidates.append({"x": x, "y": y, "w": w, "h": h, "score": 1 - (dist / 5.0)})
+                ) and dist < L_dist_threshold:
+                    L_candidates.append(
+                        {"x": x, "y": y, "w": w, "h": h, "score": 1 - (dist / L_dist_threshold)}
+                    )
 
             # 匹配 v
             elif (
@@ -569,13 +572,16 @@ class CombatCheck(BaseNTETask):
                 and abs(cx - self._lv_feat_v[1]) < 0.15
                 and abs(cy - self._lv_feat_v[2]) < 0.15
             ):
+                v_dist_threshold = 1.0
                 dist = cv2.matchShapes(self._lv_cnt_v, cnt, cv2.CONTOURS_MATCH_I3, 0)
                 if (
                     self._lv_aspect_v * 0.6 < aspect_ratio < self._lv_aspect_v * 1.5
-                ) and dist < 1.0:
-                    v_candidates.append({"x": x, "y": y, "w": w, "h": h, "score": 1 - dist})
+                ) and dist < v_dist_threshold:
+                    v_candidates.append(
+                        {"x": x, "y": y, "w": w, "h": h, "score": 1 - (dist / v_dist_threshold)}
+                    )
 
-        results = []
+        results: list[Box] = []
         for L in L_candidates:
             best_v = None
             min_gap = float("inf")
@@ -591,6 +597,9 @@ class CombatCheck(BaseNTETask):
                         best_v = v
 
             if best_v:
+                conf = float((L["score"] + best_v["score"]) / 2.0)
+                if conf < threshold:
+                    continue
                 box_x = L["x"]
                 box_y = min(L["y"], best_v["y"])
                 box_w = (best_v["x"] + best_v["w"]) - L["x"]
@@ -602,7 +611,7 @@ class CombatCheck(BaseNTETask):
                         y=int(viewport.y + box_y),
                         width=int(box_w),
                         height=int(box_h),
-                        confidence=float((L["score"] + best_v["score"]) / 2.0),
+                        confidence=conf,
                         name="lv",
                     )
                 )
