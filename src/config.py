@@ -21,7 +21,7 @@ key_config_option = ConfigOption(
 
 monthly_card_config_option = ConfigOption(
     "Monthly Card Config",
-    {"Check Monthly Card": True, "Monthly Card Time": 4},
+    {"Check Monthly Card": True, "Monthly Card Time": 5},
     description="Turn on to avoid interruption by monthly card when executing tasks",
     config_description={
         "Check Monthly Card": "Check for monthly card to avoid interruption of tasks",
@@ -189,7 +189,7 @@ config = {
     "onetime_tasks": [  # 用户点击触发的任务
         ["src.tasks.DailyTask", "DailyTask"],
         ["src.tasks.FishingTask", "FishingTask"],
-        # ["src.tasks.MyOneTimeTask", "MyOneTimeTask"],
+        ["src.tasks.AnomalyTask", "AnomalyTask"],
         # ["src.tasks.MyOneTimeWithAGroup", "MyOneTimeWithAGroup"],
         # ["src.tasks.MyOneTimeWithAGroup2", "MyOneTimeWithAGroup2"],
         # ["src.tasks.MyOneTimeWithBGroup", "MyOneTimeWithBGroup"],

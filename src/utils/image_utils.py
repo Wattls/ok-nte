@@ -3,7 +3,6 @@ from typing import Tuple
 
 import cv2
 import numpy as np
-
 from ok import color_range_to_bound
 
 

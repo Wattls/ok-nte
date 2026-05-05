@@ -11,7 +11,7 @@ from src.tasks.NTEOneTimeTask import NTEOneTimeTask
 from src.utils import image_utils as iu
 
 
-class FishingTask(BaseNTETask):
+class FishingTask(NTEOneTimeTask, BaseNTETask):
     # --- 配置项键名 ---
     CONF_ROUNDS = "循环次数"
     CONF_CONTROL_MODE = "控条模式"
@@ -26,7 +26,7 @@ class FishingTask(BaseNTETask):
         super().__init__(*args, **kwargs)
         self.name = "自动钓鱼"
         self.description = "自动完成一轮或多轮钓鱼"
-        self.icon = FluentIcon.GAME
+        self.icon = FluentIcon.SYNC
         self.support_schedule_task = True
         self.default_config.update(
             {
@@ -61,7 +61,7 @@ class FishingTask(BaseNTETask):
         self.add_exit_after_config()
 
     def run(self):
-        NTEOneTimeTask.run(self)
+        super().run()
         try:
             return self.do_run()
         except TaskDisabledException:

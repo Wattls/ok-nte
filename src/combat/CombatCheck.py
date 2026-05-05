@@ -528,9 +528,9 @@ class CombatCheck(BaseNTETask):
         if frame is None:
             frame = self.frame
 
-        viewport = self.main_viewport
-        self.draw_boxes(boxes=viewport, color="blue")
-        roi = viewport.crop_frame(frame)
+        box = self.box_of_screen(0.1543, 0.1021, 0.9070, 0.7, name="find_lv")
+        self.draw_boxes(boxes=box, color="blue")
+        roi = box.crop_frame(frame)
         binary = gf.isolate_lv_to_white(roi)
 
         contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -607,8 +607,8 @@ class CombatCheck(BaseNTETask):
 
                 results.append(
                     Box(
-                        x=int(viewport.x + box_x),
-                        y=int(viewport.y + box_y),
+                        x=int(box.x + box_x),
+                        y=int(box.y + box_y),
                         width=int(box_w),
                         height=int(box_h),
                         confidence=conf,
