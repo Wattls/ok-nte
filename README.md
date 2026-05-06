@@ -107,6 +107,7 @@ All issues and consequences arising from the use of this software are not relate
 在启动自动化前，请务必检查并确认以下设置：
 
 *   **图形设置**
+    *   **UI 设置**：**禁用** 所有会导致 UI 与默认不同的设置。
     *   **显卡滤镜**：**关闭** 所有显卡滤镜和锐化效果（如 NVIDIA Freestyle, AMD FidelityFX）。
     *   **游戏亮度**：使用游戏 **默认亮度**。
 *   **分辨率**

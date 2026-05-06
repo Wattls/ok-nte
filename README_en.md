@@ -98,6 +98,7 @@ To ensure the program runs stably, please carefully read the following configura
 Before starting the automation, please check and confirm the following settings:
 
 *   **Graphics Settings**
+    *   **UI Settings**: **Disable** all settings that cause the UI to differ from the default.
     *   **Graphics Filters**: **Disable** all graphics card filters and sharpening effects (e.g., NVIDIA Freestyle, AMD FidelityFX).
     *   **Game Brightness**: Use the **default** in-game brightness.
 *   **Resolution**
