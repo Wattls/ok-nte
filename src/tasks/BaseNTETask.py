@@ -459,7 +459,7 @@ class BaseNTETask(BaseTask):
         in_world = self.in_world()
         return in_team and in_world
 
-    def wait_in_team(self, time_out=10, raise_if_not_found=True, esc=False):
+    def wait_in_team(self, time_out=30, raise_if_not_found=True, esc=False):
         success = self.wait_until(
             self.is_in_team,
             time_out=time_out,
@@ -470,7 +470,7 @@ class BaseNTETask(BaseTask):
             self.sleep(0.1)
         return success
 
-    def wait_in_team_and_world(self, time_out=10, raise_if_not_found=True, esc=False):
+    def wait_in_team_and_world(self, time_out=30, raise_if_not_found=True, esc=False):
         success = self.wait_until(
             self.in_team_and_world,
             time_out=time_out,
