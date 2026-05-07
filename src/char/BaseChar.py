@@ -81,7 +81,9 @@ class BaseChar:
         self._ultimate_available = False
         self._skill_available = False
         self.last_perform = 0
+        self.last_skill_time = -1
         self.last_outro_time = -1
+        self.start_combat = False
         self.confidence = confidence
         self.logger = Logger.get_logger(self.name)
         self.cycle_start_time = 0.0
@@ -258,7 +260,6 @@ class BaseChar:
             send_click (bool, optional): 在释放技能前是否发送普通点击。默认为 True。
             animation_min_duration (float, optional): 动画的最短持续时间。默认为 0。
             time_out (float, optional): 技能释放的超时时间。默认为 0。
-
         Returns:
             tuple: (是否成功点击 (bool), 技能持续时间 (float), 是否检测到动画 (bool))。
         """
@@ -324,6 +325,7 @@ class BaseChar:
             self.task.next_frame()
         self.task.in_ultimate = False
         if clicked:
+            self.last_skill_time = skill_click_time
             self.sleep(post_sleep)
         duration = time.time() - skill_click_time if skill_click_time != 0 else 0
         if animation_start > 0:
@@ -706,10 +708,16 @@ class BaseChar:
         current_char = self.task.get_current_char(raise_exception=False)
         for char in self.task.chars:
             if char != current_char:
+                if char.need_fast_perform_entry(current_char):
+                    self.logger.info(f"In fast perform entry with {char}")
+                    return True
                 priority = char.do_get_switch_priority(current_char, has_intro=False)
                 if priority >= Priority.FAST_SWITCH:
                     self.logger.info(f"In lock with {char}")
                     return True
+        return False
+
+    def need_fast_perform_entry(self, current_char):
         return False
 
     def check_outro(self):
