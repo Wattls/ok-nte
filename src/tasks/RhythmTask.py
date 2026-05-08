@@ -173,38 +173,6 @@ class RhythmTask(NTEOneTimeTask, BaseNTETask):
         self.click(FINISH_CLOSE_POS[0], FINISH_CLOSE_POS[1])
         self.sleep(1.0)
 
-    def _handle_restart(self) -> bool:
-        """
-        在选歌界面点击开始演奏，然后等待进入音游。
-        若点击后 5 秒仍在选歌界面（"开始演奏"依然可见），则再次点击。
-        """
-        self.log_info("等待选歌界面")
-        # 最多等 10 秒进入选歌界面
-        deadline = time.time() + 10
-        while time.time() < deadline:
-            if self._is_song_select():
-                break
-            self.next_frame()
-            self.sleep(0.5)
-        else:
-            return False
-
-        # 点击开始演奏，然后轮询确认是否已离开选歌界面
-        while True:
-            self.log_info("点击开始演奏")
-            self.operate_click(SONG_START_POS[0], SONG_START_POS[1])
-
-            # 等待 5 秒，看是否已进入音游（选歌界面消失）
-            enter_deadline = time.time() + 5
-            while time.time() < enter_deadline:
-                self.next_frame()
-                self.sleep(0.5)
-                if not self._is_song_select():
-                    self.log_info("已进入音游界面")
-                    return True
-
-            # 5 秒后还在选歌界面，再点一次
-            self.log_info("仍在选歌界面，再次点击开始演奏")
 
     def _is_song_select(self) -> bool:
         """检测当前是否在选歌界面（右下角有"开始演奏"按钮）"""
