@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING, Optional
 
 import cv2
 import numpy as np
-
 from ok import Box, Logger, find_color_rectangles
+
 from src.Labels import Labels
 from src.tasks.BaseNTETask import BaseNTETask
 from src.utils import game_filters as gf
@@ -32,9 +32,9 @@ class CombatCheck(BaseNTETask):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._in_ultimate = False
+        self._in_animation = False
         self._in_combat = False
-        self.skip_combat_check = False
+        self.skip_sleep_check = False
         self.sleep_check_interval = 0.2
         self.last_out_of_combat_time = 0
         self.out_of_combat_reason = ""
@@ -51,12 +51,12 @@ class CombatCheck(BaseNTETask):
         self._bg_ocr_lock = threading.Lock()
 
     @property
-    def in_ultimate(self):
-        return self._in_ultimate
+    def in_animation(self):
+        return self._in_animation
 
-    @in_ultimate.setter
-    def in_ultimate(self, value):
-        self._in_ultimate = value
+    @in_animation.setter
+    def in_animation(self, value):
+        self._in_animation = value
         if value:
             self._last_ultimate = time.time()
 
@@ -328,7 +328,7 @@ class CombatCheck(BaseNTETask):
             self.in_sleep_check = False
 
     def do_check_in_combat(self, target):
-        if self.in_ultimate:
+        if self.in_animation:
             return True
         if self._in_combat:
             if self.scene.in_combat() is not None:

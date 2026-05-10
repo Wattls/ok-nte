@@ -378,7 +378,7 @@ class BaseCombatTask(CombatCheck):
             current_char.continues_normal_attack(0.2)
 
     def _set_current_char(self, current_char: "BaseChar | None", switch_to: "BaseChar", has_intro):
-        self.in_ultimate = False
+        self.in_animation = False
         if current_char:
             current_char.switch_out()
             if has_intro:
@@ -590,6 +590,9 @@ class BaseCombatTask(CombatCheck):
             self.get_current_char().on_combat_end(self.chars)
 
     def sleep_check(self):
+        if self.skip_sleep_check:
+            return
+        
         if SoundCombatContext.should_interrupt_combat():
             self.log_info("Combat sleep interrupted by sound action")
             SoundCombatContext().execute_pending_action()
