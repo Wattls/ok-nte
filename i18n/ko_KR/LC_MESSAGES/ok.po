@@ -523,3 +523,9 @@ msgstr "디버그 로그 출력"
 
 msgid "键位"
 msgstr "키 설정"
+
+msgid "Start Game"
+msgstr "게임 시작"
+
+msgid "Launcher Path"
+msgstr "런처 경로"

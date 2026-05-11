@@ -533,10 +533,17 @@ class BaseNTETask(BaseTask):
         """
         强制将窗口带到最前端。
         """
-        if self.is_foreground():
-            return
-
+        if not self.hwnd:
+            self.log_warning("bring_to_front skipped: hwnd_window unavailable")
+            return False
         hwnd = self.hwnd.hwnd
+
+        if self.is_foreground():
+            self.log_info(f"bring_to_front {hwnd} already is foreground")
+            return True
+
+        self.log_info(f"try bring_to_front {hwnd}")
+
         current_thread_id = 0
         target_thread_id = 0
         foreground_thread_id = 0
@@ -571,8 +578,15 @@ class BaseNTETask(BaseTask):
                 win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
             win32gui.BringWindowToTop(hwnd)
             win32gui.SetForegroundWindow(hwnd)
+            self.sleep(0.1)
+            if self.is_foreground():
+                self.log_info(f"bring_to_front {hwnd} succeeded")
+                return True
+            self.log_info(f"bring_to_front {hwnd} did not keep foreground")
+            return False
         except Exception as e:
             logger.debug(f"bring_to_front failed: {e}")
+            return False
         finally:
             if attached_foreground:
                 ctypes.windll.user32.AttachThreadInput(

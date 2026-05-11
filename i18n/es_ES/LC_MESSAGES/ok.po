@@ -523,3 +523,9 @@ msgstr "Mostrar logs de depuración"
 
 msgid "键位"
 msgstr "Teclas"
+
+msgid "Start Game"
+msgstr "Iniciar juego"
+
+msgid "Launcher Path"
+msgstr "Ruta del lanzador"

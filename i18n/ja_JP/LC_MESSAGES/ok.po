@@ -523,3 +523,9 @@ msgstr "デバッグログを出力"
 
 msgid "键位"
 msgstr "キー設定"
+
+msgid "Start Game"
+msgstr "ゲームを起動"
+
+msgid "Launcher Path"
+msgstr "ランチャーパス"

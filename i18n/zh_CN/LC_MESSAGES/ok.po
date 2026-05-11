@@ -522,3 +522,9 @@ msgstr ""
 
 msgid "键位"
 msgstr ""
+
+msgid "Start Game"
+msgstr "启动游戏"
+
+msgid "Launcher Path"
+msgstr "启动器路径"
