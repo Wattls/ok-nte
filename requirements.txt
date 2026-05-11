@@ -55,7 +55,7 @@ numpy==2.3.5
     #   soundfile
     #   soxr
     #   tifffile
-ok-script==1.0.109
+ok-script==1.0.113
     # via ok-nte (pyproject.toml)
 onnxocr-ppocrv5==0.0.17
     # via ok-nte (pyproject.toml)
