@@ -2,9 +2,10 @@ import time
 
 import cv2
 import numpy as np
+from ok import Box, TaskDisabledException
 from qfluentwidgets import FluentIcon
 
-from ok import Box, TaskDisabledException
+from src import text_white_color
 from src.Labels import Labels
 from src.tasks.BaseNTETask import BaseNTETask
 from src.tasks.NTEOneTimeTask import NTEOneTimeTask
@@ -99,6 +100,7 @@ class FishingTask(NTEOneTimeTask, BaseNTETask):
 
     def run_once(self, round_index: int) -> bool:
         if not self.close_success_overlay():
+            self.screenshot("close_success_overlay_timeout")
             raise TaskDisabledException("关闭成功界面失败")
 
         if not self.cast_rod():
@@ -528,15 +530,17 @@ class FishingTask(NTEOneTimeTask, BaseNTETask):
         """
         检测开始钓鱼按钮是否存在
         """
-        return self.find_one(Labels.fish_start)
+        def frame_process(img):
+            return iu.create_color_mask(img, text_white_color)
+        return self.find_one(Labels.fish_start, frame_processor=frame_process)
 
-    def is_success_text_exist(self):
-        """检测界面是否出现“成功”字样（通过黑白像素占比判断）"""
-        box = self.box_of_screen(0.4434, 0.8938, 0.5566, 0.9181, name="success_text")
-        white_text = self.calculate_color_percentage(text_white_color, box)
-        black_border = self.calculate_color_percentage(text_black_color, box)
-        # self.log_debug(f"white_text: {white_text}, black_border: {black_border}")
-        return white_text > 0.2 and black_border > 0.2
+    # def is_success_text_exist(self):
+    #     """检测界面是否出现“成功”字样（通过黑白像素占比判断）"""
+    #     box = self.box_of_screen(0.4434, 0.8938, 0.5566, 0.9181, name="success_text")
+    #     white_text = self.calculate_color_percentage(text_white_color, box)
+    #     black_border = self.calculate_color_percentage(text_black_color, box)
+    #     # self.log_debug(f"white_text: {white_text}, black_border: {black_border}")
+    #     return white_text > 0.2 and black_border > 0.2
 
     def is_fish_bait_exist(self):
         """
@@ -675,11 +679,11 @@ fishing_bite_blue_color = {
     "b": (250, 255),
 }
 
-text_white_color = {
-    "r": (210, 255),
-    "g": (210, 255),
-    "b": (210, 255),
-}
+# text_white_color = {
+#     "r": (210, 255),
+#     "g": (210, 255),
+#     "b": (210, 255),
+# }
 
 text_black_color = {
     "r": (0, 10),
