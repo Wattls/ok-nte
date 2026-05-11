@@ -8,10 +8,11 @@ import win32gui
 import win32process
 from qfluentwidgets import FluentIcon
 
-from Labels import Labels
-from interaction.NTEInteraction import NTEInteraction
-from ok import TaskDisabledException, BaseTask
+from ok import TaskDisabledException
 from ok.util.process import execute
+from src.interaction.NTEInteraction import NTEInteraction
+from src.Labels import Labels
+from src.tasks.BaseNTETask import BaseNTETask
 
 GAME_EXE = "HTGame.exe"
 LAUNCHER_EXE = "NTEGame.exe"
@@ -20,9 +21,7 @@ GAME_CAPTURE_CONFIG = {
         "exe": GAME_EXE,
         "hwnd_class": "UnrealWindow",
     },
-    "interaction": [
-        NTEInteraction
-    ],
+    "interaction": [NTEInteraction],
     "capture_method": [
         "WGC",
         "BitBlt_RenderFull",
@@ -31,6 +30,8 @@ GAME_CAPTURE_CONFIG = {
 LAUNCHER_CAPTURE_CONFIG = {
     "windows": {
         "exe": LAUNCHER_EXE,
+        "hwnd_class": "Qt51517QWindowOwnDC",
+        "top_hwnd_class": ["Qt51517QWindowToolSaveBitsOwnDC"],
         "interaction": "PostMessage",
         "capture_method": [
             "WGC",
@@ -40,17 +41,12 @@ LAUNCHER_CAPTURE_CONFIG = {
 }
 
 
-class LauncherTask(BaseTask):
-
+class LauncherTask(BaseNTETask):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.name = "Start Game"
         self.icon = FluentIcon.SYNC
-        self.default_config.update(
-            {
-                'Launcher Path': ''
-            }
-        )
+        self.default_config.update({"Launcher Path": ""})
         self.enable_after_start = True  # auto run after start
         self.visible = True  # False to hide from the UI
 
@@ -139,19 +135,30 @@ class LauncherTask(BaseTask):
                 self.log_info("Launcher window is minimized; Start Game click succeeded")
                 return True
 
-            start_button = self.find_one(
-                Labels.launcher_start_game,
-                horizontal_variance=0.1,
-                vertical_variance=0.1,
-            )
+            try:
+                start_button = self.find_one(
+                    Labels.launcher_start_game,
+                    horizontal_variance=0.1,
+                    vertical_variance=0.1,
+                )
+            except AttributeError as e:
+                self.log_warning(
+                    f"Launcher frame was unavailable while finding Start Game button; "
+                    f"treating as success: {e}"
+                )
+                return True
             if start_button:
                 self.log_info(f"Found launcher Start Game button: {start_button}")
                 self.click(start_button, after_sleep=2)
+                if not self._is_launcher_minimized():
+                    self.click(0.5269, 0.6122, after_sleep=2)  # close popup
                 clicked_start_game = True
                 if self._is_launcher_minimized():
                     self.log_info("Launcher minimized after Start Game click")
                     return True
-                self.log_info("Launcher is not minimized after click; will check and click again if needed")
+                self.log_info(
+                    "Launcher is not minimized after click; will check and click again if needed"
+                )
                 continue
 
             if clicked_start_game:
@@ -182,6 +189,13 @@ class LauncherTask(BaseTask):
             raise TaskDisabledException("Timed out waiting for game process")
         self.log_info("Game process found; switching capture to game")
         self._capture_game()
+
+        deadline = time.time() + 10
+        while not self.bring_to_front() and time.time() < deadline:
+            self.log_info(
+                f"Waiting for game to set foreground timeout remain {deadline - time.time()}s"
+            )
+            time.sleep(2)
 
     def _wait_for_process(self, exe_name, time_out=120, settle_window=False):
         self.log_info(
@@ -337,8 +351,10 @@ class LauncherTask(BaseTask):
             return launcher_path
 
         if configured_path:
-            self.log_warning(f"Configured Launcher Path does not exist; clearing it: {configured_path}")
-            self.config["Launcher Path"] = ""
+            self.log_warning(
+                f"Configured Launcher Path does not exist; clearing it: {configured_path}"
+            )
+            self.config["Launcher Path"] = "" # type: ignore
 
         self.log_info("Launcher Path config is empty or invalid; checking Windows registry")
         launcher_path = self._find_launcher_path_from_registry()
@@ -355,7 +371,7 @@ class LauncherTask(BaseTask):
             old_path = self.config.get("Launcher Path", "")
             if old_path != path:
                 self.log_info(f"Updating Launcher Path config: {path}")
-                self.config["Launcher Path"] = path
+                self.config["Launcher Path"] = path # type: ignore
             else:
                 self.log_info(f"Launcher Path config is already current: {path}")
         elif path:
