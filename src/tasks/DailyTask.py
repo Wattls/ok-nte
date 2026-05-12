@@ -184,12 +184,12 @@ class DailyTask(NTEOneTimeTask, BaseNTETask):
 
     def shift_idx(self, task):
         """切换任务索引"""
-        if self.config and self.config.get(self.CONF_AUTO_CYCLE_SUB_TASK):
+        if self.config.get(self.CONF_AUTO_CYCLE_SUB_TASK):
             if isinstance(task, AnomalyTask):
                 task_type = self.config.get(task.CONF_TASK_TYPE)
                 next_idx = task.get_next_sub_idx(self.config)
                 if task_type == task.TASK_EXP_COIN:
-                    self.config[task.CONF_EXP_TARGET] = task.EXP_ALL[next_idx]
+                    self.config[task.CONF_EXP_TARGET] = task.EXP_ALL[next_idx]  # type: ignore
                 else:
                     conf_key = {
                         task.TASK_ABILITY: task.CONF_ABILITY_ID,
@@ -197,7 +197,7 @@ class DailyTask(NTEOneTimeTask, BaseNTETask):
                         task.TASK_CONSOLE: task.CONF_CONSOLE_ID,
                     }.get(task_type)
                     if conf_key:
-                        self.config[conf_key] = int(next_idx + 1)
+                        self.config[conf_key] = int(next_idx + 1)  # type: ignore
             self.sync_config()
 
     def claim_activity_rewards(self):
@@ -265,7 +265,7 @@ class DailyTask(NTEOneTimeTask, BaseNTETask):
 def retry_on_action(action: Callable, reset_action: Callable | None = None, attempt=3):
     result = None
     count = 0
-    while not result and attempt <= attempt:
+    while not result and count <= attempt:
         count += 1
         result = action()
         if not result and reset_action is not None:
