@@ -184,6 +184,15 @@ class LauncherTask(BaseNTETask):
                 return True
 
             if button_state == LauncherButtonState.READY_OTHER:
+                if update_in_progress:
+                    self.log_info(
+                        "Launcher button is ready while update is in progress; "
+                        "waiting for Start Game button"
+                    )
+                    self.sleep(1)
+                    deadline = self._extend_deadline_for_update(deadline, loop_start)
+                    continue
+
                 ready_other_count += 1
                 now = time.time()
                 if ready_other_count < 2:
