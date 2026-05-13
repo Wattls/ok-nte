@@ -15,8 +15,15 @@ key_config_option = ConfigOption(
         "Skill Key": "e",
         "Ultimate Key": "q",
         "Arc Key": "r",
+        "Use QWERTY Physical Keys": False,
     },
     description="In Game Hotkey for Skills",
+    config_description={
+        "Use QWERTY Physical Keys": (
+            "All letter/number keys, including every hotkey above, are replaced by US QWERTY\n"
+            "physical positions, not your current layout's printed keys."
+        ),
+    },
 )
 
 monthly_card_config_option = ConfigOption(
