@@ -153,15 +153,23 @@ class BaseNTETask(BaseTask):
     # fmt: off
     @overload
     def operate_click(self, x: int | Box | List[Box] = -1, y=-1, move_back=False, name=None,
-                       interval=-1, down_time=0.02, key='left',
+                       interval=-1, down_time=0.02, after_sleep=0, key='left',
                        hcenter=False, vcenter=False, action_name=None) -> Any:
         ...
     # fmt: on
 
     def operate_click(self, *args, **kwargs):
+        action_name = kwargs.get("action_name", args[10] if len(args) > 10 else "operate_click")
+        interval = kwargs.get("interval", args[4] if len(args) > 4 else 0.1)
+        after_sleep = kwargs.get("after_sleep", args[6] if len(args) > 6 else 0)
+        if not self.check_action_interval(action_name, interval):
+            return False
+        kwargs["interval"] = -1
         kwargs["move"] = True
         kwargs["after_sleep"] = 0
-        return self.operate(lambda: self.click(*args, **kwargs), block=True)
+        result = self.operate(lambda: self.click(*args, **kwargs), block=True)
+        self.sleep(after_sleep)
+        return result
 
     # fmt: off
     @overload
