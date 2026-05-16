@@ -828,7 +828,7 @@ class BaseNTETask(BaseTask):
 
             if self.find_one(Labels.login_setting):
                 self.log_info("found login_setting, bring_to_front and click")
-                if not self.hwnd.is_foreground():
+                if not self.is_foreground():
                     self.bring_to_front()
                     self.sleep(3)
                 self.click(0.499, 0.865, after_sleep=3)
