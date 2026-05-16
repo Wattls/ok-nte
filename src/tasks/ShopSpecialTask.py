@@ -24,6 +24,7 @@ class ShopSpecialTask(NTEOneTimeTask, BaseNTETask):
         super().__init__(*args, **kwargs)
         self.name = "店长特供挂机版"
         self.description = "自动完成一轮或多轮挂机店长特供"
+        self.instructions = "请到咖啡店可以f交互的位置使用, 如果想指定关卡请先进入一次该关卡然后退出再启动脚本即可"
         self.icon = FluentIcon.SYNC
         self.default_config.update({self.CONF_ROUNDS: 1})
         self.config_description.update({self.CONF_ROUNDS: "自动循环的轮数"})
