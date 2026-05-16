@@ -3,31 +3,39 @@ import time
 from ok import TaskDisabledException
 from qfluentwidgets import FluentIcon
 
+from src.Labels import Labels
 from src.tasks.BaseNTETask import BaseNTETask
 from src.tasks.NTEOneTimeTask import NTEOneTimeTask
 
 
 class ShopSpecialTask(NTEOneTimeTask, BaseNTETask):
     CONF_ROUNDS = "循环次数"
+    CONF_ROB = "抢钱流"
 
     REVENUE_CHECK_INTERVAL = 1.0  # OCR 检测营业额间隔（秒）
-    CLICK_INTERVAL = 0.5          # 步骤3点击间隔（秒）
-    CONTROL_TIMEOUT = 120         # 单轮玩法最长等待（秒）
+    CLICK_INTERVAL = 0.5  # 步骤3点击间隔（秒）
+    CONTROL_TIMEOUT = 120  # 单轮玩法最长等待（秒）
 
-    POS_START   = (0.8957, 0.9326)  # 开始玩法按钮
-    POS_TAP     = (0.0496, 0.4125)  # 循环点击目标
-    OCR_BOX     = (0.7977, 0.0882, 0.9711, 0.1257)  # 营业额 OCR 区域
-    POS_CLOSE   = (0.0230, 0.0361)  # 关闭结果界面
+    POS_START = (0.8957, 0.9326)  # 开始玩法按钮
+    POS_TAP = (0.0496, 0.4125)  # 循环点击目标
+    OCR_BOX = (0.7977, 0.0882, 0.9711, 0.1257)  # 营业额 OCR 区域
+    POS_CLOSE = (0.0230, 0.0361)  # 关闭结果界面
     POS_CONFIRM = (0.5984, 0.7764)  # 结算确认
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.name = "店长特供挂机版"
-        self.description = "自动完成一轮或多轮挂机店长特供"
-        self.instructions = "请到咖啡店可以f交互的位置使用, 如果想指定关卡请先进入一次该关卡然后退出再启动脚本即可"
+        self.name = "店长特供"
+        self.description = "自动循环进出关卡（需配合游戏内挂机流派使用）"
+        self.instructions = (
+            "功能说明：本功能仅负责『自动退出关卡』与『重新开启关卡』的点击循环，"
+            "不包含任何局内的制作食物或招待客人操作。\n\n"
+            "使用方法：\n"
+            "1. 确保您已配置好游戏内的挂机流派。\n"
+            "2. 站在咖啡店可进行 F 交互的位置。\n"
+            "3. （可选）若想指定特定关卡，请先手动进入该关卡一次后退出，再启动本脚本即可。"
+        )
         self.icon = FluentIcon.SYNC
-        self.default_config.update({self.CONF_ROUNDS: 1})
-        self.config_description.update({self.CONF_ROUNDS: "自动循环的轮数"})
+        self.default_config.update({self.CONF_ROUNDS: 1, self.CONF_ROB: True})
         self.add_exit_after_config()
 
     def run(self):
@@ -49,7 +57,6 @@ class ShopSpecialTask(NTEOneTimeTask, BaseNTETask):
         self.info_set("成功次数", "0")
         self.info_set("失败次数", 0)
         self.info_set("失败原因", None)
-        self.info_set("当前营业额", "-")
         self.log_info(f"开始店长特供，共 {rounds} 轮")
 
         for round_index in range(1, rounds + 1):
@@ -74,13 +81,37 @@ class ShopSpecialTask(NTEOneTimeTask, BaseNTETask):
     def run_round(self, round_index: int) -> bool:
         # 步骤1：按 F 进入店长特供页面
         self.info_set("当前阶段", "进入店长特供")
-        self.send_key("f", action_name="enter_shop_special")
-        self.sleep(1.5)
+        self.wait_until(
+            lambda: not self.is_in_team(),
+            pre_action=lambda: self.send_key("f", interval=1),
+            settle_time=0.5,
+            time_out=10,
+            raise_if_not_found=True,
+        )
+        self.sleep(0.5)
 
         # 步骤2：点击开始玩法
         self.info_set("当前阶段", "开始玩法")
-        self.operate_click(*self.POS_START, action_name="start_gameplay")
-        self.sleep(1.5)
+        start_box = self.box_of_screen(0.922, 0.889, 0.969, 0.972, name="start_btn", hcenter=True)
+        button = self.wait_until(
+            lambda: self.find_one(Labels.skip_quest_confirm, box=start_box),
+            settle_time=0.5,
+            time_out=10,
+            raise_if_not_found=True,
+        )
+        self.sleep(0.5)
+
+        change_char_box = self.box_of_screen(
+            0.630, 0.889, 0.679, 0.969, name="change_char_btn", hcenter=True
+        )
+        self.wait_until(
+            lambda: not self.find_one(Labels.skip_quest_confirm, box=change_char_box),
+            pre_action=lambda: self.operate_click(button, interval=1),
+            settle_time=0.5,
+            time_out=10,
+            raise_if_not_found=True,
+        )
+        self.sleep(0.5)
 
         # 步骤3：循环点击 + OCR 检测营业额
         self.info_set("当前阶段", "营业中")
@@ -89,71 +120,59 @@ class ShopSpecialTask(NTEOneTimeTask, BaseNTETask):
 
         # 步骤4：关闭结果界面 → 结算确认
         self.info_set("当前阶段", "结算确认")
-        self.operate_click(*self.POS_CLOSE, action_name="close_result")
-        self.sleep(1.5)
-        self.operate_click(*self.POS_CONFIRM, action_name="confirm_settlement")
-        self.sleep(1.5)
+        claim_box = self.box_of_screen(0.629, 0.734, 0.688, 0.819, name="claim_btn", hcenter=True)
+        button = self.wait_until(
+            lambda: self.find_one(Labels.skip_quest_confirm, box=claim_box),
+            pre_action=lambda: self.operate_click(*self.POS_CLOSE, interval=1),
+            settle_time=0.5,
+            time_out=10,
+            raise_if_not_found=True,
+        )
+        self.sleep(0.5)
+
+        self.wait_until(
+            self.is_in_team,
+            pre_action=lambda: self.operate_click(button, interval=1),
+            settle_time=0.5,
+            time_out=10,
+            raise_if_not_found=True,
+        )
+        self.sleep(0.5)
 
         self.info_set("当前阶段", "本轮完成")
         return True
 
     def run_until_target_revenue(self) -> bool:
         deadline = time.time() + self.CONTROL_TIMEOUT
-        last_ocr_time = 0.0
 
         self.log_info("开始营业循环")
         while time.time() < deadline:
-            self.operate_click(*self.POS_TAP, action_name="shop_tap")
-            self.sleep(self.CLICK_INTERVAL)
+            if self.config.get(self.CONF_ROB, True):
+                self.operate_click(
+                    *self.POS_TAP, interval=self.CLICK_INTERVAL, restore_cursor=False
+                )
 
-            now = time.time()
-            if now - last_ocr_time >= self.REVENUE_CHECK_INTERVAL:
-                last_ocr_time = now
-                if self._check_revenue_reached():
-                    self.log_info("营业额已达标，退出营业循环")
-                    return True
+            if self._check_revenue_reached():
+                self.log_info("营业额已达标，退出营业循环")
+                return True
+            self.sleep(0.01)
 
         self.log_error("营业额检测超时")
         return False
 
     def _check_revenue_reached(self) -> bool:
-        x1, y1, x2, y2 = self.OCR_BOX
-        raw = self.ocr(x1, y1, x2, y2)
-        if not raw:
-            self.log_debug("OCR 未识别到文字")
-            return False
-
-        if isinstance(raw, list):
-            text = "".join(
-                b.name if hasattr(b, "name") else (b.text if hasattr(b, "text") else str(b))
-                for b in raw
-            )
-        else:
-            text = str(raw)
-
-        self.log_debug(f"OCR 识别结果: {text!r}")
-        current, target = self._parse_revenue(text)
-        if current is None or target is None:
-            self.log_warning(f"营业额解析失败，原始文字: {text!r}")
-            return False
-
-        self.info_set("当前营业额", f"{current}/{target}")
-        return current >= target
-
-    @staticmethod
-    def _parse_revenue(text: str):
-        text = text.strip().replace(" ", "").replace("／", "/")
-        idx = text.rfind("/")
-        if idx == -1:
-            return None, None
-        left  = "".join(c for c in text[:idx]     if c.isdigit())
-        right = "".join(c for c in text[idx + 1:] if c.isdigit())
-        if not left or not right:
-            return None, None
-        return int(left), int(right)
+        box = self.box_of_screen(0.9484, 0.1660, 0.9555, 0.1771, name="star")
+        return self.calculate_color_percentage(yellow_star_color, box) > 0.1
 
     def _fail_round(self, round_index: int, reason: str, message: str) -> bool:
         self.info_set("失败原因", message)
         self.screenshot(f"{reason}_{round_index}")
         self.log_error(message)
         return False
+
+
+yellow_star_color = {
+    "r": (250, 255),
+    "g": (200, 220),
+    "b": (50, 80),
+}
