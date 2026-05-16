@@ -1,6 +1,6 @@
 import time
 
-from ok import TaskDisabledException
+from ok import TaskDisabledException, og
 from qfluentwidgets import FluentIcon
 
 from src.Labels import Labels
@@ -26,7 +26,7 @@ class ShopSpecialTask(NTEOneTimeTask, BaseNTETask):
         super().__init__(*args, **kwargs)
         self.name = "店长特供"
         self.description = "自动循环进出关卡（需配合游戏内挂机流派使用）"
-        self.instructions = (
+        self.instructions = og.app.tr(
             "功能说明：本功能仅负责『自动退出关卡』与『重新开启关卡』的点击循环，"
             "不包含任何局内的制作食物或招待客人操作。\n\n"
             "使用方法：\n"
