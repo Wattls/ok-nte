@@ -87,7 +87,7 @@ class BaseNTETask(BaseTask):
         if og.my_app is None:
             return []
         if box is None:
-            box = self.box_of_screen(0.0840, 0.1326, 0.9176, 0.8694, name="openvino_box")
+            box = self.box_of_screen(0.0840, 0.1326, 0.9030, 0.8694, name="openvino_box")
         self.draw_boxes(boxes=box, color="blue")
         if frame is None:
             frame = self.frame
@@ -108,7 +108,7 @@ class BaseNTETask(BaseTask):
         return results
 
     def openvino_detect_async(
-        self, frame=None, box: Box = None, threshold=0.6, force=False, mask_regions=None
+        self, frame=None, box: Box = None, threshold=0.7, force=False, mask_regions=None
     ) -> List[Box]:
         """异步检测，返回结果可能为缓存值"""
         return self._openvino_detect(
@@ -116,7 +116,7 @@ class BaseNTETask(BaseTask):
         )
 
     def openvino_detect_sync(
-        self, frame=None, box: Box = None, threshold=0.5, mask_regions=None
+        self, frame=None, box: Box = None, threshold=0.7, mask_regions=None
     ) -> List[Box]:
         """同步检测，会等待结果返回"""
         return self._openvino_detect(frame, True, box, threshold, mask_regions=mask_regions)
