@@ -22,7 +22,7 @@ from src.utils import game_filters as gf
 from src.utils import image_utils as iu
 
 logger = Logger.get_logger(__name__)
-stamina_re = re.compile(r"(\d+)[\s/\\|!Il／-]+\d+")
+stamina_re = re.compile(r"(\d+)/(\d+)")
 
 
 class BaseNTETask(BaseTask):
