@@ -154,8 +154,8 @@ class Hotori(BaseChar):
         self.clear_team_skill_records()
 
     def on_chain_step_complete(self):
-        if self.team_skill_window_start > 0:
-            pass
+        # TODO: 链步骤完成后的团队技能窗口处理逻辑
+        pass
 
     # def skill_available(self, check_color=True):
     #     available = super().skill_available(check_color=check_color)

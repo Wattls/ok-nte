@@ -24,7 +24,7 @@ class ZeroChain(Zero):
                 if self.ultimate_available():
                     break
                 self.sleep(0.1)
-        
+
         q_deadline = time.time() + 0.3
         self.task._combat_settle.time = None
         while time.time() < q_deadline:
@@ -34,7 +34,7 @@ class ZeroChain(Zero):
                 if self.click_ultimate(send_click=True):
                     break
             self.sleep(0.05)
-        
+
         while True:
             self.task.sleep_check()
             clicked, _, _ = self.click_skill()

@@ -600,8 +600,8 @@ class BaseChar:
         pass
 
     def on_chain_step_complete(self):
-        """链式步骤完成回调；默认无操作，子类可按需覆盖。"""
-        return None
+        """链步骤完成回调, 默认无操作, 子类按需覆盖."""
+        pass
 
     @property
     def add_freeze_duration(self):

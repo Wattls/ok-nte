@@ -6,21 +6,21 @@ from src.char.Hotori import Hotori
 
 
 class HotoriChain(Hotori):
-    STARTUP_CHAIN = [
+    STARTUP_CHAIN = (
         ("HotoriChain", "chain_e_start_chain"),
         ("ZeroChain", "chain_q_e_wait"),
         ("JiuyuanChain", "chain_intro_only"),
         ("NanallyChain", "chain_dynamic_standby"),
         ("JiuyuanChain", "chain_q_e_heavy"),
         ("HotoriChain", "chain_q_na"),
-    ]
-    WARMUP_CHAIN = [
+    )
+    WARMUP_CHAIN = (
         ("ZeroChain", "chain_nop"),
         ("JiuyuanChain", "chain_intro_only"),
         ("ZeroChain", "chain_e_only"),
         ("NanallyChain", "chain_dynamic_standby"),
         ("JiuyuanChain", "chain_q_e_heavy"),
-    ]
+    )
     STARTUP_DURATION = 15.0
     WARMUP_DURATION = 20.0
 
@@ -123,6 +123,16 @@ class HotoriChain(Hotori):
             self.sleep(0.03)
         return False
 
+    def _finish_e_chain(self):
+        """E技能释放完成后的统一退出流程."""
+        self._e_used = True
+        self._e_lockdown = True
+        self.start_team_skill_window()
+        self.sleep(0.1)
+        self.task.chain_executor.step_complete()
+        self._send_chain_key()
+        self.switch_next_char()
+
     def chain_e_start_chain(self):
         self.logger.info(f"chain_e_start_chain: entering, has_intro={self.has_intro}")
 
@@ -143,13 +153,7 @@ class HotoriChain(Hotori):
 
             if self.has_cd("skill"):
                 self.logger.info("chain_e_start_chain: E already in CD, proceeding")
-                self._e_used = True
-                self._e_lockdown = True
-                self.start_team_skill_window()
-                self.sleep(0.1)
-                self.task.chain_executor.step_complete()
-                self._send_chain_key()
-                self.switch_next_char()
+                self._finish_e_chain()
                 return
 
             now = time.time()
@@ -173,26 +177,14 @@ class HotoriChain(Hotori):
                         continue
                     else:
                         self.logger.info(f"chain_e_start_chain: E cast assumed (no CD but skill unavailable) after {fail_count} failures")
-                    self._e_used = True
-                    self._e_lockdown = True
-                    self.start_team_skill_window()
-                    self.sleep(0.1)
-                    self.task.chain_executor.step_complete()
-                    self._send_chain_key()
-                    self.switch_next_char()
+                    self._finish_e_chain()
                     return
                 else:
                     fail_count += 1
                     self.logger.warning(f"chain_e_start_chain: E click failed ({fail_count} consecutive)")
                     if self.has_cd("skill"):
                         self.logger.info("chain_e_start_chain: E CD detected after failed click, proceeding")
-                        self._e_used = True
-                        self._e_lockdown = True
-                        self.start_team_skill_window()
-                        self.sleep(0.1)
-                        self.task.chain_executor.step_complete()
-                        self._send_chain_key()
-                        self.switch_next_char()
+                        self._finish_e_chain()
                         return
             else:
                 self.logger.debug("chain_e_start_chain: skill not available, waiting")

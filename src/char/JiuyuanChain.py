@@ -28,14 +28,19 @@ class JiuyuanChain(Jiuyuan):
         self._send_chain_key()
         self.switch_next_char()
 
+    def _wait_intro_until_ultimate(self):
+        """等待开场动画直到终极技可用."""
+        if not self.has_intro:
+            return
+        start = time.time()
+        while time.time() - start < self.INTRO_MOTION_FREEZE_DURATION:
+            self.click()
+            if self.ultimate_available():
+                break
+            self.sleep(0.1)
+
     def chain_q_e_heavy(self):
-        if self.has_intro:
-            start = time.time()
-            while time.time() - start < self.INTRO_MOTION_FREEZE_DURATION:
-                self.click()
-                if self.ultimate_available():
-                    break
-                self.sleep(0.1)
+        self._wait_intro_until_ultimate()
         q_deadline = time.time() + 0.3
         self.task._combat_settle.time = None
         while time.time() < q_deadline:
@@ -49,12 +54,14 @@ class JiuyuanChain(Jiuyuan):
             self.task.sleep_check()
             clicked, _, _ = self.click_skill()
             if clicked:
-                self.task.suppress_dodge()
-                self.sleep(1.3)
-                self.task.mouse_down()
-                self.sleep(0.6)
-                self.task.mouse_up()
-                self.task.unsuppress_dodge()
+                try:
+                    self.task.suppress_dodge()
+                    self.sleep(1.3)
+                    self.task.mouse_down()
+                    self.sleep(0.6)
+                    self.task.mouse_up()
+                finally:
+                    self.task.unsuppress_dodge()
                 self.task.chain_executor.step_complete()
                 self._send_chain_key()
                 self.switch_next_char()
