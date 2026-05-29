@@ -174,6 +174,7 @@ config = {
         ["src.tasks.RhythmTask", "RhythmTask"],
         # ["src.tasks.ShopSpecialTask", "ShopSpecialTask"],
         ["src.tasks.AutoHeistTask", "AutoHeistTask"],
+        ["src.tasks.DarkTask", "DarkTask"],
         # ["src.tasks.MyOneTimeWithAGroup", "MyOneTimeWithAGroup"],
         # ["src.tasks.MyOneTimeWithAGroup2", "MyOneTimeWithAGroup2"],
         # ["src.tasks.MyOneTimeWithBGroup", "MyOneTimeWithBGroup"],
