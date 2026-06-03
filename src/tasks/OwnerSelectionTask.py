@@ -3,14 +3,20 @@ import time
 from ok import TaskDisabledException, og
 from qfluentwidgets import FluentIcon
 
-from src.Labels import Labels
-from src.tasks.BaseNTETask import BaseNTETask
 from src.tasks.NTEOneTimeTask import NTEOneTimeTask
+from src.tasks.RecordTask import RecordTask
+
+RECORD_INS = (
+    "记录点击目标关卡的操作，分为两个步骤：\n"
+    "1. 使用滚轮滚动至目标可见 (若不需要则点击目标)\n"
+    "2. 点击目标"
+)
 
 
-class ShopSpecialTask(NTEOneTimeTask, BaseNTETask):
+class OwnerSelectionTask(NTEOneTimeTask, RecordTask):
     CONF_ROUNDS = "循环次数"
     CONF_ROB = "抢钱流"
+    CONF_CORDS = "记录坐标"
 
     REVENUE_CHECK_INTERVAL = 1.0  # OCR 检测营业额间隔（秒）
     CLICK_INTERVAL = 0.5  # 步骤3点击间隔（秒）
@@ -32,11 +38,13 @@ class ShopSpecialTask(NTEOneTimeTask, BaseNTETask):
             "使用方法：\n"
             "1. 确保您已配置好游戏内的挂机流派。\n"
             "2. 站在咖啡店可进行 F 交互的位置。\n"
-            "3. （可选）若想指定特定关卡，请先手动进入该关卡一次后退出，再启动本脚本即可。"
+            "3. 首次启动需录制目标, 点击[开始]后请跟随指示操作。"
         )
-        self.icon = FluentIcon.SYNC
-        self.default_config.update({self.CONF_ROUNDS: 1, self.CONF_ROB: True})
-        self.add_exit_after_config()
+        self.icon = FluentIcon.CAFE
+        self.group_name = "都市闲趣"
+        self.group_icon = FluentIcon.GAME
+        self.default_config.update({self.CONF_ROUNDS: 99999, self.CONF_ROB: False})
+        self.tr(RECORD_INS)
 
     def run(self):
         super().run()
@@ -60,15 +68,20 @@ class ShopSpecialTask(NTEOneTimeTask, BaseNTETask):
         self.info_set("失败原因", None)
         self.log_info(f"开始店长特供，共 {rounds} 轮")
 
+        self.wait_until(
+            lambda: not self.is_in_team(),
+            pre_action=lambda: self.send_key("f", interval=1),
+            settle_time=0.5,
+            time_out=10,
+            raise_if_not_found=True,
+        )
+
         while round_index <= rounds:
-            self.info_set("轮次", f"{round_index}/{rounds}")
-            self.info_set("成功次数", f"{success_count}/{rounds}")
-            self.info_set("失败次数", failed_count)
-            self.log_info(f"开始第 {round_index}/{rounds} 轮")
+            self.log_info(f"开始第 {round_index} 轮")
 
             if self.run_round(round_index):
                 success_count += 1
-                self.info_set("成功次数", f"{success_count}/{rounds}")
+                self.info_set("成功次数", success_count)
             else:
                 failed_count += 1
                 self.info_set("失败次数", failed_count)
@@ -77,46 +90,27 @@ class ShopSpecialTask(NTEOneTimeTask, BaseNTETask):
             rounds = self._configured_rounds()
             round_index += 1
 
-        self.info_set("当前阶段", "任务结束")
-        self.info_set("成功次数", f"{success_count}/{rounds}")
-        self.info_set("失败次数", failed_count)
+            self.info_set("轮次", f"{round_index}/{rounds}")
+            self.info_set("成功次数", success_count)
+            self.info_set("失败次数", failed_count)
+
         self.log_info(f"店长特供结束，成功 {success_count}/{rounds}", notify=True)
 
     def run_round(self, round_index: int) -> bool:
         # 步骤1：按 F 进入店长特供页面
         self.info_set("当前阶段", "进入店长特供")
         self.wait_until(
-            lambda: not self.is_in_team(),
-            pre_action=lambda: self.send_key("f", interval=1),
-            settle_time=0.5,
-            time_out=10,
+            lambda: self.find_confirm(box=self.box_of_screen(0.922, 0.889, 0.969, 0.972)),
+            time_out=60,
             raise_if_not_found=True,
+            settle_time=0.25,
         )
         self.sleep(0.5)
-
+        self.record_or_replay_operations(2, instruction_text=self.tr(RECORD_INS))
+        self.sleep(0.5)
         # 步骤2：点击开始玩法
         self.info_set("当前阶段", "开始玩法")
-        start_box = self.box_of_screen(0.922, 0.889, 0.969, 0.972, name="start_btn", hcenter=True)
-        button = self.wait_until(
-            lambda: self.find_one(Labels.skip_quest_confirm, box=start_box),
-            settle_time=0.5,
-            time_out=10,
-            raise_if_not_found=True,
-        )
-        self.sleep(0.5)
-
-        change_char_box = self.box_of_screen(
-            0.630, 0.889, 0.679, 0.969, name="change_char_btn", hcenter=True
-        )
-        self.wait_until(
-            lambda: not self.find_one(Labels.skip_quest_confirm, box=change_char_box),
-            pre_action=lambda: self.operate_click(button, interval=1),
-            settle_time=0.5,
-            time_out=10,
-            raise_if_not_found=True,
-        )
-        self.sleep(0.5)
-
+        self.wait_click_confirm(range=(0.922, 0.889, 0.969, 0.972))
         # 步骤3：循环点击 + OCR 检测营业额
         self.info_set("当前阶段", "营业中")
         if not self.run_until_target_revenue():
@@ -124,28 +118,15 @@ class ShopSpecialTask(NTEOneTimeTask, BaseNTETask):
 
         # 步骤4：关闭结果界面 → 结算确认
         self.info_set("当前阶段", "结算确认")
-        claim_box = self.box_of_screen(0.629, 0.734, 0.688, 0.819, name="claim_btn", hcenter=True)
-        button = self.wait_until(
-            lambda: self.find_one(Labels.skip_quest_confirm, box=claim_box),
-            pre_action=lambda: self.operate_click(*self.POS_CLOSE, interval=1),
-            settle_time=0.5,
-            time_out=10,
-            raise_if_not_found=True,
+        self.wait_click_confirm(
+            action=lambda: self.operate_click(*self.POS_CLOSE, interval=1),
+            range=(0.629, 0.734, 0.688, 0.819),
         )
         self.sleep(0.5)
-
-        self.wait_until(
-            self.is_in_team,
-            pre_action=lambda: self.operate_click(button, interval=1),
-            settle_time=0.5,
-            time_out=10,
-            raise_if_not_found=True,
-        )
-        self.sleep(0.5)
-
         self.info_set("当前阶段", "本轮完成")
         return True
 
+    # 工具方法
     def run_until_target_revenue(self) -> bool:
         deadline = time.time() + self.CONTROL_TIMEOUT
 

@@ -52,19 +52,31 @@ def _inst_gap():
 INST = "<br>".join(
     [
         _inst_line("📍 步骤起点：站在可互动小吱的位置开始", "#FF5555", bold=True),
-        _inst_line("⚙️ 镜头设置：控制 ➔ 移动镜头修正 ➔ 禁用", "#FF5555", bold=True),
-        _inst_line("⚠️ 必備條件：至少有一個復活道具", "#FF5555", bold=True),
+        _inst_line("⚙️ 镜头设置", "#FF5555", bold=True),
+        _inst_line("└─ 控制 ➔ 摄像机设置", "#FE821D", bold=True, indent=1),
+        _inst_line("├─ 移动镜头修正：禁用", "#FE821D", bold=True, indent=2),
+        _inst_line("└─ 按下锁定镜头回正：启用", "#FE821D", bold=True, indent=2),
+        _inst_line("⚠️ 必备条件：至少有一个复活道具", "#FF5555", bold=True),
+        _inst_line("🥷 避战方式：翳【长按 Shift】/ 浔【长按攻击】", "#FF5555", bold=True),
         _inst_gap(),
         _inst_line("路径1推荐设置", bold=True),
         _inst_line("FPS: 60~120", indent=1),
-        _inst_line("战斗角色: 主角 / 哈尼娅", indent=1),
+        _inst_line("战斗角色: 主角 / 哈尼娅 / 浔", indent=1),
         _inst_line("跑图角色: 薄荷", indent=1),
         _inst_line("避战角色(可选): 翳 / 浔", indent=1),
         _inst_gap(),
         _inst_line("路径2推荐设置", bold=True),
-        _inst_line("战斗角色: 早雾（必须，战斗角色中最前） / 主角 / 哈尼娅", indent=1),
+        _inst_line("画质：性能 | 分辨率: 1080P | FPS: 60 | 插帧: 关闭", indent=1),
         _inst_line("跑图角色: 薄荷", indent=1),
-        _inst_line("避战角色: 翳", indent=1),
+        _inst_line("早雾避战：", indent=1),
+        _inst_line(
+            "战斗角色: 早雾（必须，战斗角色中最前，其他战斗角色随意，可塞安魂曲） / 主角 / 哈尼娅",
+            indent=2,
+        ),
+        _inst_line("避战角色: 翳", indent=2),
+        _inst_line("浔避战：", indent=1),
+        _inst_line("战斗角色: 随意 (战斗角色随意，可塞安魂曲) / 主角 / 哈尼娅", indent=2),
+        _inst_line("避战角色: 浔", indent=2),
     ]
 )
 
@@ -92,8 +104,9 @@ class AutoHeistTask(NTEOneTimeTask, BaseCombatTask):
         super().__init__(*args, **kwargs)
         self.name = "自动粉爪大劫案"
         self.icon = FluentIcon.SHOPPING_CART
+        self.group_name = "都市闲趣"
         self.instructions = INST
-        self.supported_languages = ["zh_CN"]
+        self.supported_languages = ["zh_CN", "zh_TW"]
         self.paths = {
             "路径1(路线参考自B站UP: 早柚大魔王丶)": HeistPathA,
             "路径2(在路径1基础上优化了大厅到办公层的路线)": HeistPathB,
@@ -446,10 +459,13 @@ class AutoHeistTask(NTEOneTimeTask, BaseCombatTask):
         self.log_round_info("出现异常，将退出粉爪副本")
         self.info_add("失败次数", 1)
 
+        def find_popup():
+            return self.ocr(0.4516, 0.3069, 0.5473, 0.3792, match=re.compile("确认退出"))
+
         self.wait_until(
             lambda: (
                 self.is_in_team_outside_heist()
-                or self.ocr(0.46, 0.32, 0.54, 0.37, match=re.compile("确认退出"))
+                or find_popup()
             ),
             pre_action=lambda: self.send_key("esc", action_name="quit_heist", interval=2),
             time_out=60,
@@ -460,10 +476,10 @@ class AutoHeistTask(NTEOneTimeTask, BaseCombatTask):
             return
 
         btn = self.wait_ocr(
-            0.52, 0.63, 0.68, 0.68, match=re.compile("确认"), time_out=60, raise_if_not_found=True
+            0.50, 0.60, 0.70, 0.70, match=re.compile("确认"), time_out=60, raise_if_not_found=True
         )
         self.wait_until(
-            lambda: not self.ocr(0.46, 0.32, 0.54, 0.37, match=re.compile("确认退出")),
+            lambda: not find_popup(),
             pre_action=lambda: self.operate_click(btn, action_name="quit_heist", interval=1),
             time_out=60,
             raise_if_not_found=True,

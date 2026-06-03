@@ -24,7 +24,7 @@ logger = Logger.get_logger(__name__)
 stamina_re = re.compile(r"(\d+)/(\d+)")
 
 
-class BaseNTETask(CharUIMixin, BaseTask):
+class BaseNTETask(BaseTask, CharUIMixin):  # type: ignore
     DEFAULT_MOVE = False
 
     def __init__(self, *args, **kwargs):
@@ -872,7 +872,9 @@ class BaseNTETask(CharUIMixin, BaseTask):
 
     def walk_to_treasure(self):
         if self.find_treasure():
-            self.walk_to_box(self.find_treasure, end_condition=self.find_interac, y_offset=0.1)
+            self.walk_to_box(
+                self.find_treasure, end_condition=self.find_interac, y_offset=0.1, x_threshold=0.15
+            )
             return True
 
     def walk_to_box(
@@ -1047,34 +1049,43 @@ class BaseNTETask(CharUIMixin, BaseTask):
 
     def wait_click_confirm(
         self,
-        action,
+        action: Any | None = None,
         range: tuple[float, float, float, float] | None = None,
+        settle_time=0.25,
         raise_if_not_found=True,
     ):
         if range is None:
             box = self.main_viewport
         else:
-            box = self.box_of_screen(*range)
+            box = self.box_of_screen(*range, hcenter=True)
         button = self.wait_until(
-            lambda: self.find_one(Labels.skip_quest_confirm, box=box),
+            lambda: self.find_confirm(box=box),
             pre_action=action,
-            settle_time=1,
+            settle_time=settle_time,
             raise_if_not_found=raise_if_not_found,
         )
         if not button:
             return False
+        self.sleep(0.1)
         result = self.wait_until(
-            lambda: not self.find_one(Labels.skip_quest_confirm, box=box),
-            pre_action=lambda: self.operate_click(button, interval=2),
-            settle_time=1,
+            lambda: not self.find_confirm(box=box),
+            pre_action=lambda: self.operate_click(button, interval=1),
+            settle_time=settle_time,
             raise_if_not_found=raise_if_not_found,
         )
         return bool(result)
 
+    def find_confirm(self, box=None, threshold=0.7):
+        if not isinstance(box, Box):
+            box = self.main_viewport
+        return self.find_best_match_in_box(
+            box=box, to_find=[Labels.confirm_btn_1, Labels.confirm_btn_2], threshold=threshold
+        )
+
 
 def interac_mask(image):
     mask = iu.create_color_mask(image, interac_pink_color, to_bgr=False)
-    dilated_mask = iu.morphology_mask(mask, to_bgr=False)
+    dilated_mask = iu.morphology_mask(mask, kernel_size=5, to_bgr=False)
     return dilated_mask
 
 

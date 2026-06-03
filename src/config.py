@@ -123,7 +123,7 @@ config = {
         "default": {
             "github": "https://github.com/BnanZ0/ok-nte",
             "discord": "https://discord.gg/vVyCatEBgA",
-            "sponsor": "https://ko-fi.com/bnanz",
+            "sponsor": "https://cnb.cool/BnanZ0/ok-nte-update/-/blob/main/SPONSOR.md",
             "share": "Download from https://github.com/BnanZ0/ok-nte",
             "qq_group": "https://qm.qq.com/q/bIiSLoUTVS",
             "faq": "https://github.com/BnanZ0/ok-nte",
@@ -173,7 +173,7 @@ config = {
         ["src.tasks.FishingTask", "FishingTask"],
         ["src.tasks.AnomalyTask", "AnomalyTask"],
         ["src.tasks.RhythmTask", "RhythmTask"],
-        # ["src.tasks.ShopSpecialTask", "ShopSpecialTask"],
+        ["src.tasks.OwnerSelectionTask", "OwnerSelectionTask"],
         ["src.tasks.AutoHeistTask", "AutoHeistTask"],
         ["src.tasks.DarkTask", "DarkTask"],
         # ["src.tasks.MyOneTimeWithAGroup", "MyOneTimeWithAGroup"],
@@ -196,4 +196,9 @@ config = {
         # ['src.ui.MyTab', 'MyTab'], #可选, 自定义UI, 显示在侧边栏
     ],
     "scene": ["src.scene.NTEScene", "NTEScene"],
+    'update_pyappify': {
+        'to_version': '1.1.3',
+        'zip_url': 'https://github.com/BnanZ0/ok-nte/releases/download/v0.0.53/ok-nte-win32.zip',
+        'sha256': '2d7aef33111d0db8f722dc69af528f6bf29df2b5411010dc9bea1c646eec22ce',
+    }
 }
