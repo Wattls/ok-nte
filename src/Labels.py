@@ -61,3 +61,7 @@ class Labels(str, Enum):
     target = 'target'
     teleport = 'teleport'
     treasure = 'treasure'
+    ultimate_slot_1 = 'ultimate_slot_1'
+    ultimate_slot_2 = 'ultimate_slot_2'
+    ultimate_slot_3 = 'ultimate_slot_3'
+    ultimate_slot_4 = 'ultimate_slot_4'

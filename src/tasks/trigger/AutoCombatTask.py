@@ -34,10 +34,12 @@ class AutoCombatTask(BaseCombatTask, TriggerTask):
         self.default_config.update(
             {
                 "自动目标": True,
+                "启用环合反应战斗": False,
             }
         )
         self.config_description = {
             "自动目标": "关闭时仅在中键选中敌人且画面识别到 'Lv' 文字时开启战斗",
+            "启用环合反应战斗": "开启后使用环合反应体系战斗，纯属性驱动自动切换",
         }
         self.op_index = 0
         self.origin_func = {}
@@ -55,6 +57,13 @@ class AutoCombatTask(BaseCombatTask, TriggerTask):
         team_strategy = fixed_team.get("team_strategy", "NONE")
         chain_builder = None
 
+        # 环合反应战斗模式
+        core = None
+        if self.config.get("启用环合反应战斗", False):
+            from src.combat.CombatController import CombatController
+            core = CombatController(self)
+            self.log_info("启用环合反应战斗模式")
+
         combat_start = time.time()
         while self.in_combat():
             try:
@@ -69,22 +78,25 @@ class AutoCombatTask(BaseCombatTask, TriggerTask):
                             self.load_chars()
                     self.switch_to_combat_start_char()
 
-                if team_strategy != "NONE" and self.chain_executor:
+                if core is not None:
+                    core.perform(self.get_current_char())
+                elif team_strategy != "NONE" and self.chain_executor:
                     if not self.chain_executor.active:
                         chain_builder = ChainLoader.load_strategy(self, team_strategy)
                         if chain_builder:
                             self.log_info(f"启用连携策略：{team_strategy}")
                             self.chain_executor.reset()
                             self.chain_executor.loop(chain_builder)
-                
-                if self.chain_executor and self.chain_executor.active:
-                    current_char, _ = self.chain_executor.target
-                    if current_char:
-                        current_char.perform()
+
+                if core is None:
+                    if self.chain_executor and self.chain_executor.active:
+                        current_char, _ = self.chain_executor.target
+                        if current_char:
+                            current_char.perform()
+                        else:
+                            self.get_current_char(raise_exception=True).perform()
                     else:
                         self.get_current_char(raise_exception=True).perform()
-                else:
-                    self.get_current_char(raise_exception=True).perform()
             except CharDeadException:
                 self.log_error("Characters dead", notify=True)
                 break
@@ -93,9 +105,13 @@ class AutoCombatTask(BaseCombatTask, TriggerTask):
                 ret = False
                 if self.chain_executor:
                     self.chain_executor.reset()
+                if core is not None:
+                    core.on_combat_end()
                 break
         if ret:
             self.combat_end()
+            if core is not None:
+                core.on_combat_end()
 
     def scan_team(self):
         self.log_info("开始扫描当前队伍...")

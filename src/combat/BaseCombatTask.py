@@ -13,8 +13,9 @@ from src.char.BaseChar import BaseChar, Element, Priority
 from src.char.CharFactory import get_char_by_name, get_char_by_pos
 from src.char.custom.CustomCharManager import CustomCharManager
 from src.char.Healer import Healer
-from src.combat.CombatCheck import CombatCheck
 from src.combat.ChainExecutor import ChainExecutor
+from src.combat.CombatCheck import CombatCheck
+from src.Labels import Labels
 from src.sound_trigger.SoundCombatContext import SoundCombatContext
 from src.utils import game_filters as gf
 from src.utils import image_utils as iu
@@ -62,6 +63,27 @@ class BaseCombatTask(CombatCheck):
     _element_template_cache_lock = Lock()
     _element_template_preheat_started = False
 
+    _ULTI_MATCH_POS = [
+        (2438, 296, 30, 30),
+        (2438, 472, 30, 30),
+        (2438, 648, 30, 30),
+        (2438, 824, 30, 30),
+    ]
+    _ULTIMATE_LABELS = [
+        Labels.ultimate_slot_1, Labels.ultimate_slot_2,
+        Labels.ultimate_slot_3, Labels.ultimate_slot_4,
+    ]
+
+    # CLAHE 自适应直方图均衡化，用于后台大招灰度匹配
+    _clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(4, 4))
+
+    _ENERGY_POS = [
+        (2435, 331, 36, 36),
+        (2435, 507, 36, 36),
+        (2435, 683, 36, 36),
+        (2435, 859, 36, 36),
+    ]
+
     def __init__(self, *args, **kwargs):
         """初始化战斗任务。
 
@@ -81,6 +103,9 @@ class BaseCombatTask(CombatCheck):
         self.chars_slot_mat = [None, None, None, None]
         self.element_ring_reaction_counts = {}
         self.clear_element_ring_reactions()
+        self.char_energy = {}
+        self.char_energy_a = {}       # index → a_ratio
+        self.char_ultimate_conf = {}  # index → confidence
         self.preheat_element_template_cache_async()
         CustomCharManager().preheat_feature_cache_async()
 
@@ -271,6 +296,126 @@ class BaseCombatTask(CombatCheck):
             return previous_target
         return next_target
 
+    def _build_slot_search_box(self, positions, char_index, pad=0.015):
+        x, y, w, h = positions[char_index]
+        return self.box_of_screen(
+            x / 2560.0 - pad,
+            y / 1440.0 - pad,
+            (x + w) / 2560.0 + pad,
+            (y + h) / 1440.0 + pad,
+            name=f"slot_search_{char_index + 1}",
+        )
+
+    def has_ultimate_visual(self, char_index):
+        if char_index < 0 or char_index >= 4:
+            return False
+        box = self._build_slot_search_box(self._ULTI_MATCH_POS, char_index, pad=0.01)
+
+        def ult_processor(img):
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            return self._clahe.apply(gray)
+
+        result = self.find_one(
+            self._ULTIMATE_LABELS[char_index],
+            box=box, threshold=0.45, frame_processor=ult_processor
+        )
+        if result is not None:
+            score = getattr(result, 'confidence', None)
+            self.char_ultimate_conf[char_index] = score if score is not None else 0.0
+            self.log_info(
+                f"[TEMPLATE] slot{char_index + 1} {self._ULTIMATE_LABELS[char_index]} "
+                + (f"matched conf={score:.3f}(需>=0.45)" if score else "matched")
+            )
+        else:
+            self.char_ultimate_conf[char_index] = 0.0
+            self.log_debug(
+                f"[TEMPLATE] slot{char_index + 1} "
+                f"{self._ULTIMATE_LABELS[char_index]} no match"
+            )
+        return result is not None
+
+    def _build_energy_icon_box(self, char_index):
+        x, y, w, h = self._ENERGY_POS[char_index]
+        return self.box_of_screen(
+            x / 2560.0, y / 1440.0,
+            (x + w) / 2560.0, (y + h) / 1440.0,
+            name=f"energy_icon_{char_index + 1}",
+        )
+
+    def _create_icon_mask(self, roi):
+        roi_h, roi_w = roi.shape[:2]
+        center = (roi_w // 2, roi_h // 2)
+        radius = min(roi_w, roi_h) // 2
+        mask = np.zeros((roi_h, roi_w), dtype=np.uint8)
+        cv2.circle(mask, center, radius, 255, -1)
+        return mask
+
+    def _check_energy(self, roi_bgr):
+        """使用环状遮罩法检测后台角色能量
+
+        环形遮罩 (dist 11~15)，计算两类亮度占比：
+          - c_ratio: 亮度 >= 90 的像素占比
+          - a_ratio: 亮度 >= 120 的像素占比
+        就绪条件: c_ratio >= 0.95 AND a_ratio >= 0.80
+        """
+        roi_bgr = cv2.resize(roi_bgr, (36, 36))
+        gray = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2GRAY)
+        h, w = gray.shape
+        cx, cy = w // 2, h // 2
+
+        yy, xx = np.mgrid[:h, :w]
+        dist = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
+        ring_mask = ((dist >= 12) & (dist <= 17)).astype(np.uint8) * 255
+
+        total_pixels = np.sum(ring_mask == 255)
+        if total_pixels == 0:
+            return False, 0.0, 0.0
+
+        ring_pixels = gray[ring_mask == 255]
+        c_ratio = np.sum(ring_pixels >= 90) / total_pixels
+        a_ratio = np.sum(ring_pixels >= 120) / total_pixels
+
+        ready = (c_ratio >= 0.95) and (a_ratio >= 0.80)
+        return ready, c_ratio, a_ratio
+
+    def scan_all_energy(self):
+        self.char_energy = {}
+        self.char_energy_a = {}
+
+        self.next_frame()
+        frame = self.frame
+
+        for i in range(4):
+            char = self.chars[i] if i < len(self.chars) else None
+            if char is None:
+                self.char_energy[i] = (False, 0.0)
+                continue
+
+            box = self._build_energy_icon_box(i)
+            roi = box.crop_frame(frame)
+            if roi is None:
+                self.char_energy[i] = (False, 0.0)
+                continue
+
+            is_ready, c_ratio, a_ratio = self._check_energy(roi)
+
+            self.char_energy[i] = (is_ready, c_ratio)
+            self.char_energy_a[i] = a_ratio
+            if is_ready:
+                self.log_info(f"[ENERGY] Slot {i+1} 能量检测通过 (C{c_ratio:.2f}/A{a_ratio:.2f})")
+            else:
+                self.log_debug(
+                    f"[ENERGY] Slot {i+1} C={c_ratio:.2f}(需>=0.95) A={a_ratio:.2f}(需>=0.80)"
+                )
+
+            energy_box = self._build_energy_icon_box(i)
+            self.draw_boxes(boxes=energy_box, color="green" if is_ready else "red")
+
+        # 汇总: 只列出能量满的槽位
+        ready_slots = [i+1 for i in range(4) if self.char_energy.get(i, (False, 0.0))[0]]
+        if ready_slots:
+            self.log_info(f"[ENERGY] 能量满: Slot {ready_slots}")
+
     def add_freeze_duration(self, start, duration=-1.0, freeze_time=0.1):
         """添加冻结持续时间。用于精确计算技能冷却等。
 
@@ -410,6 +555,7 @@ class BaseCombatTask(CombatCheck):
         try:
             while self.in_combat():
                 logger.debug(f"combat_once loop {self.chars}")
+                self.scan_all_energy()
                 self.get_current_char().perform()
         except CharDeadException as e:
             raise e

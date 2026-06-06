@@ -5,10 +5,13 @@ from typing_extensions import Any
 
 from src.char.BaseChar import BaseChar, Element
 from src.char.Chiz import Chiz
+from src.char.Daffodill import Daffodill
+from src.char.Fadia import Fadia
 from src.char.Hotori import Hotori
 from src.char.HotoriChain import HotoriChain
 from src.char.Jiuyuan import Jiuyuan
 from src.char.JiuyuanChain import JiuyuanChain
+from src.char.Lacrimosa import Lacrimosa
 from src.char.Mint import Mint
 from src.char.Nanally import Nanally
 from src.char.NanallyChain import NanallyChain
@@ -30,7 +33,10 @@ char_dict: dict[str, dict[str, Any]] = {
     "char_jiuyuan": {"cls": Jiuyuan, "cn_name": "九原", "element": Element.GREEN},
     "char_sakiri": {"cls": Sakiri, "cn_name": "早雾", "element": Element.RED},
     "char_nanally": {"cls": Nanally, "cn_name": "娜娜莉", "element": Element.GREEN},
+    "char_daffodill": {"cls": Daffodill, "cn_name": "达芙蒂尔", "element": Element.PURPLE},
+    "char_fadia": {"cls": Fadia, "cn_name": "法帝娅", "element": Element.BLUE},
     "char_hotori": {"cls": Hotori, "cn_name": "浔", "element": Element.WHITE},
+    "char_lacrimosa": {"cls": Lacrimosa, "cn_name": "安魂曲", "element": Element.PURPLE},
     "char_chiz": {"cls": Chiz, "cn_name": "小吱", "element": Element.WHITE},
     "char_chain_hotori": {"cls": HotoriChain, "cn_name": "浔创生链式-浔", "element": Element.WHITE},
     "char_chain_zero": {"cls": ZeroChain, "cn_name": "浔创生链式-零", "element": Element.WHITE},

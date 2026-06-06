@@ -524,6 +524,43 @@ class BaseChar:
             self.add_freeze_duration(skill_click_time, time.time() - animation_start)
         return clicked, duration, animation_start > 0
 
+    def _confirm_e_cd(self, timeout=None, tick=None):
+        if timeout is None:
+            timeout = getattr(self, 'E_CD_CONFIRM_TIMEOUT', 1.5)
+        if tick is None:
+            tick = getattr(self, 'E_CD_CONFIRM_TICK', 0.05)
+        start = time.time()
+        while time.time() - start < timeout:
+            self.task.scene.cd_refreshed = False
+            if self.has_cd("skill"):
+                return True
+            self.sleep(tick)
+        return False
+
+    def _try_click_e_and_confirm(self, poll_timeout=3.0, **click_skill_kwargs):
+        clicked, _, _ = self.click_skill(**click_skill_kwargs)
+        if not clicked:
+            return False
+
+        if self._confirm_e_cd():
+            if hasattr(self, 'record_e_cast'):
+                self.record_e_cast()
+            return True
+
+        cd_poll_start = time.time()
+        while time.time() - cd_poll_start < poll_timeout:
+            self.task.scene.cd_refreshed = False
+            if self.has_cd("skill"):
+                self.logger.info(
+                    f"{self.__class__.__name__}: E confirmed in CD after interrupted click"  # noqa: E501
+                )
+                if hasattr(self, 'record_e_cast'):
+                    self.record_e_cast()
+                return True
+            self.sleep(0.1)
+
+        return False
+
     def _wait_skill_animation(self, animation_start, skill_click_time):
         while not self.task.is_in_team():
             self.task.in_animation = True
@@ -917,3 +954,30 @@ class BaseChar:
                 self.task.send_key(anchor.index + 1)
                 return True
         return False
+
+    def _switch_and_confirm(self):
+        self._send_chain_key()
+        self.switch_next_char()
+        if not self.task.chain_executor.active:
+            return
+        next_target = self.task.chain_executor.target
+        if next_target is None or len(next_target) == 0:
+            return
+        target_char = next_target[0]
+        if target_char is self:
+            return
+        target_idx = target_char.index
+        verify_start = time.time()
+        verify_timeout = getattr(self, 'SWITCH_TIMEOUT', 1.0) * 2.0
+        loop_tick = getattr(self, 'LOOP_TICK', 0.05)
+        while time.time() - verify_start < verify_timeout:
+            self.task.sleep_check()
+            is_at_idx = self.task.is_char_at_index(target_idx)
+            if is_at_idx or self.task.get_current_char_index() == target_idx:
+                return
+            self.task.send_key(target_idx + 1)
+            self.sleep(loop_tick)
+        self.logger.warning(
+            f"_switch_and_confirm: 目标 {target_char}(index={target_idx}) "
+            f"未在 {verify_timeout:.1f}s 内确认登场"
+        )
