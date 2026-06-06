@@ -705,7 +705,7 @@ class BaseCombatTask(CombatCheck):
         """获取当前操作的角色对象。
 
         Args:
-            raise_exception (bool, optional): 如果找不到当前角色是否抛出异常。默认为 True。
+            raise_exception (bool, optional): 如果找不到当前角色是否抛出异常。默认为 False。
 
         Returns:
             BaseChar: 当前角色对象 (`BaseChar`) 或 None。
@@ -713,7 +713,8 @@ class BaseCombatTask(CombatCheck):
         for char in self.chars:
             if char and char.is_current_char:
                 return char
-        if raise_exception and not self.in_team()[0]:
+        if raise_exception:
+            self.screenshot("get_current_char_failed")
             self.raise_not_in_combat("can find current char!!")
         return None
 

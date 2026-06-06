@@ -68,7 +68,7 @@ class AutoCombatTask(BaseCombatTask, TriggerTask):
                             self.log_info("检测到残留的 Chain 类角色，重新加载基础角色配置。")
                             self.load_chars()
                     self.switch_to_combat_start_char()
-                
+
                 if team_strategy != "NONE" and self.chain_executor:
                     if not self.chain_executor.active:
                         chain_builder = ChainLoader.load_strategy(self, team_strategy)
@@ -82,9 +82,9 @@ class AutoCombatTask(BaseCombatTask, TriggerTask):
                     if current_char:
                         current_char.perform()
                     else:
-                        self.get_current_char().perform()
+                        self.get_current_char(raise_exception=True).perform()
                 else:
-                    self.get_current_char().perform()
+                    self.get_current_char(raise_exception=True).perform()
             except CharDeadException:
                 self.log_error("Characters dead", notify=True)
                 break
