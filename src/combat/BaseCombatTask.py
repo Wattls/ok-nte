@@ -1,6 +1,7 @@
 import random
 import re
 import time
+from collections import deque
 from threading import Lock, Thread
 from typing import List
 
@@ -70,8 +71,10 @@ class BaseCombatTask(CombatCheck):
         (2438, 824, 30, 30),
     ]
     _ULTIMATE_LABELS = [
-        Labels.ultimate_slot_1, Labels.ultimate_slot_2,
-        Labels.ultimate_slot_3, Labels.ultimate_slot_4,
+        Labels.ultimate_slot_1,
+        Labels.ultimate_slot_2,
+        Labels.ultimate_slot_3,
+        Labels.ultimate_slot_4,
     ]
 
     # CLAHE 自适应直方图均衡化，用于后台大招灰度匹配
@@ -104,8 +107,9 @@ class BaseCombatTask(CombatCheck):
         self.element_ring_reaction_counts = {}
         self.clear_element_ring_reactions()
         self.char_energy = {}
-        self.char_energy_a = {}       # index → a_ratio
+        self.char_energy_a = {}  # index → a_ratio
         self.char_ultimate_conf = {}  # index → confidence
+        self._energy_history = [deque(maxlen=5) for _ in range(4)]
         self.preheat_element_template_cache_async()
         CustomCharManager().preheat_feature_cache_async()
 
@@ -137,9 +141,7 @@ class BaseCombatTask(CombatCheck):
 
     @classmethod
     def _load_element_template(cls, element):
-        raw_template = cv2.imread(
-            f"assets/esper_icons/{element.value}.png", cv2.IMREAD_UNCHANGED
-        )
+        raw_template = cv2.imread(f"assets/esper_icons/{element.value}.png", cv2.IMREAD_UNCHANGED)
         if raw_template is None:
             return None
 
@@ -317,10 +319,12 @@ class BaseCombatTask(CombatCheck):
 
         result = self.find_one(
             self._ULTIMATE_LABELS[char_index],
-            box=box, threshold=0.45, frame_processor=ult_processor
+            box=box,
+            threshold=0.45,
+            frame_processor=ult_processor,
         )
         if result is not None:
-            score = getattr(result, 'confidence', None)
+            score = getattr(result, "confidence", None)
             self.char_ultimate_conf[char_index] = score if score is not None else 0.0
             self.log_info(
                 f"[TEMPLATE] slot{char_index + 1} {self._ULTIMATE_LABELS[char_index]} "
@@ -329,16 +333,17 @@ class BaseCombatTask(CombatCheck):
         else:
             self.char_ultimate_conf[char_index] = 0.0
             self.log_debug(
-                f"[TEMPLATE] slot{char_index + 1} "
-                f"{self._ULTIMATE_LABELS[char_index]} no match"
+                f"[TEMPLATE] slot{char_index + 1} {self._ULTIMATE_LABELS[char_index]} no match"
             )
         return result is not None
 
     def _build_energy_icon_box(self, char_index):
         x, y, w, h = self._ENERGY_POS[char_index]
         return self.box_of_screen(
-            x / 2560.0, y / 1440.0,
-            (x + w) / 2560.0, (y + h) / 1440.0,
+            x / 2560.0,
+            y / 1440.0,
+            (x + w) / 2560.0,
+            (y + h) / 1440.0,
             name=f"energy_icon_{char_index + 1}",
         )
 
@@ -350,33 +355,42 @@ class BaseCombatTask(CombatCheck):
         cv2.circle(mask, center, radius, 255, -1)
         return mask
 
-    def _check_energy(self, roi_bgr):
-        """使用环状遮罩法检测后台角色能量
+    @staticmethod
+    def _in_angle_sector(angle_deg, center_deg, half_width_deg):
+        """判断角度是否在扇区范围内"""
+        delta = (angle_deg - center_deg + 180) % 360 - 180
+        return abs(delta) <= half_width_deg
 
-        环形遮罩 (dist 11~15)，计算两类亮度占比：
-          - c_ratio: 亮度 >= 90 的像素占比
-          - a_ratio: 亮度 >= 120 的像素占比
-        就绪条件: c_ratio >= 0.95 AND a_ratio >= 0.80
+    def _check_energy(self, roi_bgr, char_index=0):
+        """使用白色扇区法检测后台角色能量（180°顶部扇区）
+
+        环形遮罩 r=12~17，取 180°（顶部）±10° 扇区，
+        统计亮度 >= 120 的像素占比。
+        就绪条件: 当前帧白色占比 >= 95%
         """
         roi_bgr = cv2.resize(roi_bgr, (36, 36))
         gray = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2GRAY)
         h, w = gray.shape
-        cx, cy = w // 2, h // 2
+        cx, cy = w / 2.0, h / 2.0
 
         yy, xx = np.mgrid[:h, :w]
         dist = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
         ring_mask = ((dist >= 12) & (dist <= 17)).astype(np.uint8) * 255
 
-        total_pixels = np.sum(ring_mask == 255)
+        # 180° = 顶部（最后亮的位置）
+        angles = (np.degrees(np.arctan2(-(yy - cy), xx - cx)) + 90) % 360
+        sector_mask = np.zeros_like(ring_mask)
+        sector_mask[self._in_angle_sector(angles, 180, 10)] = 255
+        top_sector_mask = cv2.bitwise_and(ring_mask, sector_mask)
+
+        total_pixels = np.sum(top_sector_mask == 255)
         if total_pixels == 0:
             return False, 0.0, 0.0
 
-        ring_pixels = gray[ring_mask == 255]
-        c_ratio = np.sum(ring_pixels >= 90) / total_pixels
-        a_ratio = np.sum(ring_pixels >= 120) / total_pixels
-
-        ready = (c_ratio >= 0.95) and (a_ratio >= 0.80)
-        return ready, c_ratio, a_ratio
+        region_pixels = gray[top_sector_mask == 255]
+        white_ratio = float(np.sum(region_pixels >= 120) / total_pixels)
+        ready = white_ratio >= 0.95
+        return ready, white_ratio, white_ratio
 
     def scan_all_energy(self):
         self.char_energy = {}
@@ -397,22 +411,22 @@ class BaseCombatTask(CombatCheck):
                 self.char_energy[i] = (False, 0.0)
                 continue
 
-            is_ready, c_ratio, a_ratio = self._check_energy(roi)
+            is_ready, c_ratio, _ = self._check_energy(roi, i)
 
             self.char_energy[i] = (is_ready, c_ratio)
-            self.char_energy_a[i] = a_ratio
+            self.char_energy_a[i] = c_ratio
             if is_ready:
-                self.log_info(f"[ENERGY] Slot {i+1} 能量检测通过 (C{c_ratio:.2f}/A{a_ratio:.2f})")
+                self.log_info(f"[ENERGY] Slot {i + 1} 能量检测通过 (扇区占比{c_ratio:.2f})")
             else:
                 self.log_debug(
-                    f"[ENERGY] Slot {i+1} C={c_ratio:.2f}(需>=0.95) A={a_ratio:.2f}(需>=0.80)"
+                    f"[ENERGY] Slot {i + 1} 扇区占比={c_ratio:.2f} (5帧均值需>=0.94)"
                 )
 
             energy_box = self._build_energy_icon_box(i)
             self.draw_boxes(boxes=energy_box, color="green" if is_ready else "red")
 
-        # 汇总: 只列出能量满的槽位
-        ready_slots = [i+1 for i in range(4) if self.char_energy.get(i, (False, 0.0))[0]]
+        # 汇总: 列出能量满的槽位
+        ready_slots = [i + 1 for i in range(4) if self.char_energy.get(i, (False, 0.0))[0]]
         if ready_slots:
             self.log_info(f"[ENERGY] 能量满: Slot {ready_slots}")
 
@@ -720,12 +734,16 @@ class BaseCombatTask(CombatCheck):
         if self.chain_executor.active:
             switch_to, _ = self.chain_executor.target
             if switch_to is not None and switch_to != current_char:
-                has_intro = free_intro or (switch_to.element != current_char.element and current_char.is_cycle_full())
+                has_intro = free_intro or (
+                    switch_to.element != current_char.element and current_char.is_cycle_full()
+                )
                 return switch_to, has_intro
             return None
         anchor = self.chain_executor.pending_anchor
         if anchor is not None and anchor != current_char:
-            has_intro = free_intro or (anchor.element != current_char.element and current_char.is_cycle_full())
+            has_intro = free_intro or (
+                anchor.element != current_char.element and current_char.is_cycle_full()
+            )
             self.chain_executor.set_axis_anchor(None)
             return anchor, has_intro
         return self._find_switch_target(current_char, free_intro)
@@ -773,7 +791,7 @@ class BaseCombatTask(CombatCheck):
             current_char=current_char,
             has_intro=has_intro,
             log_prefix="switch_to_char",
-            time_out=self.switch_char_time_out
+            time_out=self.switch_char_time_out,
         )
 
     def switch_to_combat_start_char(self):
@@ -867,6 +885,8 @@ class BaseCombatTask(CombatCheck):
     def combat_end(self):
         """战斗结束时调用的清理方法。"""
         SoundCombatContext().clear_task_if(self)
+        for hist in self._energy_history:
+            hist.clear()
 
         current_char = self.get_current_char(raise_exception=False)
         if current_char:
@@ -877,6 +897,10 @@ class BaseCombatTask(CombatCheck):
             return
 
         if SoundCombatContext.should_interrupt_combat():
+            if SoundCombatContext.is_non_blocking():
+                self.log_info("Combat interrupt (non-blocking)")
+                SoundCombatContext().execute_pending_action()
+                return
             self.log_info("Combat sleep interrupted by sound action")
             SoundCombatContext().execute_pending_action()
             SoundCombatContext.wait_for_resume()
@@ -989,6 +1013,7 @@ class BaseCombatTask(CombatCheck):
 
         self.chars = new_chars
         from src.combat.ChainLoader import ChainLoader
+
         team_strategy = fixed_team.get("team_strategy", "NONE")
         if team_strategy != "NONE":
             ChainLoader.replace_chars_with_strategy(self, team_strategy)

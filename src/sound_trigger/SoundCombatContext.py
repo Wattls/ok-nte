@@ -16,6 +16,7 @@ class SoundCombatContext:
     _combat_interrupt = threading.Event()
     _action_complete = threading.Event()
     _sound_action_window = 1
+    _non_blocking = False  # True 时主循环不被 interrupt 阻塞
 
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
@@ -83,6 +84,23 @@ class SoundCombatContext:
     @classmethod
     def should_interrupt_combat(cls):
         return cls._combat_interrupt.is_set()
+
+    @classmethod
+    def enter_non_blocking(cls):
+        """声明进入非阻塞模式：主循环正在执行高优操作（如变身E速切），
+        interrupt 信号不会阻塞主线程，而是由调用方自行处理。
+        """
+        cls._non_blocking = True
+
+    @classmethod
+    def exit_non_blocking(cls):
+        """退出非阻塞模式，恢复正常 interrupt 阻塞行为。"""
+        cls._non_blocking = False
+
+    @classmethod
+    def is_non_blocking(cls) -> bool:
+        """当前是否处于非阻塞模式。"""
+        return cls._non_blocking
 
     @classmethod
     def wait_for_resume(cls):
@@ -207,7 +225,15 @@ class SoundCombatContext:
         self._queue_action("dodge")
 
     def _on_counter_triggered(self):
-        self._queue_action("dodge" if self._dodge_all_attacks else "counter")
+        # 检查队伍中是否有达芙蒂尔
+        daffodill = self._find_daffodill(self._trigger.task if self._trigger else None)
+        if daffodill is not None:
+            # 有达芙蒂尔时，反击音效始终走 counter 分支
+            self._queue_action("counter")
+        elif self._dodge_all_attacks:
+            self._queue_action("dodge")
+        else:
+            self._queue_action("counter")
 
     def execute_pending_action(self):
         with self._context_lock:
@@ -221,18 +247,39 @@ class SoundCombatContext:
             or trigger.task is None
             or trigger.task.executor.paused
         ):
-            self.exit_priority()
+            self.clear_priority()
             return
 
         try:
             if action == "dodge":
                 trigger.execute_dodge()
             elif action == "counter":
-                trigger.execute_counter_attack()
+                # 反击时检查队伍中是否有达芙蒂尔
+                daffodill = self._find_daffodill(trigger.task)
+                if daffodill is not None:
+                    # 切换到达芙蒂尔执行反击
+                    current = trigger.task.get_current_char(raise_exception=False)
+                    if current is not None and current is not daffodill:
+                        logger.info("[反击分发] 切换到达芙蒂尔执行反击")
+                        trigger.task.switch_to_char(daffodill, has_intro=True)
+                    daffodill.handle_counter_attack()
+                    if current is not None and current is not daffodill:
+                        trigger.task.switch_to_char(current, has_intro=False)
+                else:
+                    trigger.execute_counter_attack()
         except Exception as e:
             logger.error("Failed to execute sound action", e)
         finally:
-            self.exit_priority()
+            self.clear_priority()
+
+    def _find_daffodill(self, task):
+        """在队伍中查找达芙蒂尔。"""
+        if task is None:
+            return None
+        for c in task.chars:
+            if c is not None and c.__class__.__name__ == "Daffodill":
+                return c
+        return None
 
     def update_task(self, task):
         with self._context_lock:

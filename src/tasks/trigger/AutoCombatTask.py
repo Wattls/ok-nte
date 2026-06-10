@@ -1,28 +1,15 @@
 import time
 
 from ok import Logger, TriggerTask
-from PySide6.QtCore import QObject, Signal
 from qfluentwidgets import FluentIcon
 
-from src.char.CharFactory import get_char_feature_by_pos
-from src.char.custom.CustomCharManager import CustomCharManager
 from src.combat.BaseCombatTask import BaseCombatTask, CharDeadException, NotInCombatException
 from src.combat.ChainLoader import ChainLoader
-
-
-class ScannerSignals(QObject):
-    scan_done = Signal(list, str)
-
-
-scanner_signals = ScannerSignals()
 
 logger = Logger.get_logger(__name__)
 
 
 class AutoCombatTask(BaseCombatTask, TriggerTask):
-    txt_team_not_exist = "队伍不存在"
-    txt_team_not_enough = "队伍人数少于2人"
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.default_config = {"_enabled": True}
@@ -35,40 +22,43 @@ class AutoCombatTask(BaseCombatTask, TriggerTask):
             {
                 "自动目标": True,
                 "启用环合反应战斗": False,
+                "行为树模式(实验性)": False,
             }
         )
-        self.config_description = {
-            "自动目标": "关闭时仅在中键选中敌人且画面识别到 'Lv' 文字时开启战斗",
-            "启用环合反应战斗": "开启后使用环合反应体系战斗，纯属性驱动自动切换",
-        }
+        self.config_description.update(
+            {
+                "自动目标": "关闭时仅在中键选中敌人且画面识别到 'Lv' 文字时开启战斗",
+                "启用环合反应战斗": "开启后自动管理环合反应体系（失谐/创生）。"
+                "队伍匹配链式（浔-零-九原-娜娜莉）时自动执行链式，"
+                "其余队伍自动执行环合反应。关闭则回退通用自动战斗",
+                "行为树模式(实验性)": "【实验性】使用行为树节点替代线性执行流程。"
+                "需同时开启「启用环合反应战斗」。默认关闭，开启后日志前缀为 [BT]。",
+            }
+        )
         self.op_index = 0
         self.origin_func = {}
-        if self._app is not None:
-            self.tr(self.txt_team_not_exist)
-            self.tr(self.txt_team_not_enough)
 
     def run(self):
         ret = False
+
         if not self.scene.is_in_team(self.is_in_team):
             return
 
-        manager = CustomCharManager()
-        fixed_team = manager.get_fixed_team()
-        team_strategy = fixed_team.get("team_strategy", "NONE")
+        team_strategy = "NONE"
         chain_builder = None
 
-        # 环合反应战斗模式
+        # 环合反应战斗模式（延迟创建，在首次进战斗时初始化）
         core = None
-        if self.config.get("启用环合反应战斗", False):
-            from src.combat.CombatController import CombatController
-            core = CombatController(self)
-            self.log_info("启用环合反应战斗模式")
+        # 行为树模式（实验性）
+        btree_ctx = None
+        btree_root = None
 
         combat_start = time.time()
         while self.in_combat():
             try:
                 if not ret:
                     ret = True
+                    team_strategy = self._auto_detect_strategy()
                     if team_strategy == "NONE":
                         has_residual_chain = any(
                             c.__class__.__name__.endswith("Chain") for c in self.chars if c
@@ -76,11 +66,28 @@ class AutoCombatTask(BaseCombatTask, TriggerTask):
                         if has_residual_chain:
                             self.log_info("检测到残留的 Chain 类角色，重新加载基础角色配置。")
                             self.load_chars()
+                    else:
+                        self.log_info(f"检测到适用连招策略：{team_strategy}")
                     self.switch_to_combat_start_char()
+                    # 首次进战斗时创建 CombatController / BTContext（避免战斗外无效刷屏）
+                    synergy_on = self.config.get("启用环合反应战斗", False)
+                    btree_mode = self.config.get("行为树模式(实验性)", False)
+                    if core is None and synergy_on and team_strategy == "NONE":
+                        if btree_mode:
+                            from src.combat.btree.context import BTContext
+                            from src.combat.btree.loader import build_default_tree
 
-                if core is not None:
-                    core.perform(self.get_current_char())
-                elif team_strategy != "NONE" and self.chain_executor:
+                            btree_ctx = BTContext(self)
+                            btree_root = build_default_tree()
+                            self.log_info("启用环合反应战斗模式 [行为树]")
+                        else:
+                            from src.combat.CombatController import CombatController
+
+                            core = CombatController(self)
+                            self.log_info("启用环合反应战斗模式")
+
+                # 链式战斗初始化（在首次帧时激活）
+                if team_strategy != "NONE" and self.chain_executor:
                     if not self.chain_executor.active:
                         chain_builder = ChainLoader.load_strategy(self, team_strategy)
                         if chain_builder:
@@ -88,15 +95,20 @@ class AutoCombatTask(BaseCombatTask, TriggerTask):
                             self.chain_executor.reset()
                             self.chain_executor.loop(chain_builder)
 
-                if core is None:
-                    if self.chain_executor and self.chain_executor.active:
-                        current_char, _ = self.chain_executor.target
-                        if current_char:
-                            current_char.perform()
-                        else:
-                            self.get_current_char(raise_exception=True).perform()
+                # 执行阶段（优先级：链式 > 环合反应 > 默认自动战斗）
+                if self.chain_executor and self.chain_executor.active:
+                    current_char, _ = self.chain_executor.target
+                    if current_char:
+                        current_char.perform()
                     else:
                         self.get_current_char(raise_exception=True).perform()
+                elif core is not None:
+                    core.perform(self.get_current_char())
+                elif btree_ctx is not None:
+                    btree_ctx.current_char = self.get_current_char()
+                    btree_root.tick(btree_ctx)
+                else:
+                    self.get_current_char(raise_exception=True).perform()
             except CharDeadException:
                 self.log_error("Characters dead", notify=True)
                 break
@@ -107,35 +119,34 @@ class AutoCombatTask(BaseCombatTask, TriggerTask):
                     self.chain_executor.reset()
                 if core is not None:
                     core.on_combat_end()
+                if btree_ctx is not None:
+                    btree_ctx.reset()
                 break
         if ret:
             self.combat_end()
             if core is not None:
                 core.on_combat_end()
+            if btree_ctx is not None:
+                btree_ctx.reset()
 
-    def scan_team(self):
-        self.log_info("开始扫描当前队伍...")
-        in_team, _, count = self.in_team()
-        if not in_team or count == 0:
-            scanner_signals.scan_done.emit([], self.tr(self.txt_team_not_exist))
-            self.log_info("队伍不存在, 扫描结束")
-            return
-        if count < 2:
-            scanner_signals.scan_done.emit([], self.tr(self.txt_team_not_enough))
-            self.log_info("队伍人数少于2人, 扫描结束")
-            return
+    # 策略注册表：strategy_name -> required role_ids
+    # 新增队伍策略只需在此添加一行 + ChainLoader 中注册对应分支
+    STRATEGY_REGISTRY = [
+        ("HOTORI_CREATION_CHAIN", {"hotori", "zero", "jiuyuan", "nanally"}),
+    ]
 
-        manager = CustomCharManager()
-        results = []
-        frame = self.frame
-        for i in range(count):
-            feature_mat, w, h = get_char_feature_by_pos(self, i, frame=frame)
-            if feature_mat is not None and feature_mat.size > 0:
-                is_match, match_name, confidence = manager.match_feature(self, feature_mat)
-                name = match_name if is_match else None
-                results.append(
-                    {"index": i, "mat": feature_mat, "width": w, "height": h, "match": name}
-                )
-                self.log_debug(f"char_{i + 1}: {name}, confidence={confidence:.2f}")
-        scanner_signals.scan_done.emit(results, "")
-        self.log_info("扫描完成！")
+    def _auto_detect_strategy(self):
+        """自动检测当前队伍匹配的连招策略，未匹配返回 NONE。
+        采用注册表模式，新增策略只需往 STRATEGY_REGISTRY 追加。
+        """
+        if not self.chars:
+            return "NONE"
+        found = set()
+        for c in self.chars:
+            role_id = ChainLoader._resolve_role(c)
+            if role_id:
+                found.add(role_id)
+        for strategy_name, required in self.STRATEGY_REGISTRY:
+            if required.issubset(found):
+                return strategy_name
+        return "NONE"

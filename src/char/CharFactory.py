@@ -64,6 +64,15 @@ def _build_char_instance(
         combo_ref = manager.to_combo_ref(combo_ref_override)
 
     if not combo_ref:
+        # 内置角色回退：按 cn_name 在 char_dict 中匹配
+        for key, info in char_dict.items():
+            if key == "char_default":
+                continue
+            if isinstance(info, dict) and info.get("cn_name") == match_name:
+                cls = info.get("cls", BaseChar)
+                instance = cls(task, index, char_name=match_name, confidence=sim)
+                instance.element = info.get("element", Element.DEFAULT)
+                return instance
         return BaseChar(task, index, char_name=match_name, confidence=sim)
 
     builtin_key = manager.get_builtin_key(combo_ref)

@@ -1,0 +1,35 @@
+{
+  "element_ring": ["White", "Green", "Red", "Purple", "Blue", "Yellow"],
+  "synergy_pairs": {
+    "White-Green": "创生(Blossom)",
+    "Green-Red": "覆纹(RuneMark)",
+    "Red-Purple": "浊燃(Smolder)",
+    "Purple-Blue": "黯星(VoidStar)",
+    "Blue-Yellow": "浸染(Infiltrate)",
+    "Yellow-White": "延滞(Stasis)"
+  },
+  "synergy_triple": {
+    "White-Green-Yellow": "盈蓄(Reservoir)",
+    "Red-Purple-Blue": "失谐(Dissonance)"
+  },
+  "systems": {
+    "creation": {
+      "elements": ["White", "Green", "Yellow"],
+      "anchor": "White",
+      "description": "创生体系",
+      "primary_pair": "White-Green",
+      "primary_duration": 10,
+      "secondary_pair": "Yellow-White",
+      "secondary_duration": 5
+    },
+    "dissonance": {
+      "elements": ["Red", "Purple", "Blue"],
+      "anchor": "Purple",
+      "description": "失谐体系",
+      "primary_pair": "Red-Purple",
+      "primary_duration": 15,
+      "secondary_pair": "Purple-Blue",
+      "secondary_duration": 5
+    }
+  }
+}

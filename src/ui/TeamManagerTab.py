@@ -1,14 +1,14 @@
+import traceback
 from typing import Literal
 
 from ok import og
 from ok.gui.widget.CustomTab import CustomTab
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtWidgets import QGraphicsDropShadowEffect, QHBoxLayout, QVBoxLayout
 from qfluentwidgets import (
     BodyLabel,
     CardWidget,
-    ComboBox,
     FluentIcon,
     Flyout,
     ImageLabel,
@@ -22,11 +22,8 @@ from qfluentwidgets import (
     TransparentToolButton,
 )
 
-import threading
-import time
-
 from src.char.custom.CustomCharManager import CustomCharManager
-from src.tasks.trigger.AutoCombatTask import AutoCombatTask, scanner_signals
+from src.tasks.trigger.AutoCombatTask import AutoCombatTask
 from src.ui.common import (
     COMBO,
     TEAM_MANAGEMENT,
@@ -34,6 +31,7 @@ from src.ui.common import (
     char_manager_signals,
     cv_to_pixmap,
 )
+from src.ui.TeamScanner import TeamScanError, TeamScanner
 
 
 
@@ -43,6 +41,13 @@ def tr_fmt(text_id, **kwargs):
     for k, v in kwargs.items():
         t = t.replace(f"{{{k}}}", str(v))
     return t
+
+
+class TeamManagerSignals(QObject):
+    scan_done = Signal(list, str)
+
+
+team_manager_signals = TeamManagerSignals()
 
 
 class NewCharDialog(MessageBoxBase):
@@ -123,6 +128,9 @@ class SlotCard(CardWidget):
         self.tr_slot_title = og.app.tr("{} 号位")
         self.tr_scan_prompt = og.app.tr("点击上方按钮扫描...")
         self.tr_action_btn = og.app.tr("未识别，关联新特征")
+        self.tr_add_match_feature_btn = og.app.tr("加入特征")
+        self.tr_feature_added_btn = og.app.tr("特征已加入")
+        self.tr_confidence = og.app.tr("置信度: {:.2f}")
 
         self.shadow_effect = QGraphicsDropShadowEffect(self)
         self.shadow_effect.setBlurRadius(30)
@@ -135,6 +143,7 @@ class SlotCard(CardWidget):
         self.image = ImageLabel()
         self.image.setFixedSize(120, 80)
         self.status = BodyLabel(self.tr_scan_prompt)
+        self.status.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.btn_act = PrimaryPushButton(self.tr_action_btn, self)
         self.btn_act.hide()
 
@@ -148,11 +157,20 @@ class SlotCard(CardWidget):
         self.current_mat = None
         self.current_w = 0
         self.current_h = 0
+        self.current_match_name = ""
+        self.current_confidence = None
 
-    def update_result(self, mat, w, h, match_name):
+    def _status_text(self, text, confidence=None):
+        if confidence is None:
+            return text
+        return f"{text}\n{self.tr_confidence.format(confidence)}"
+
+    def update_result(self, mat, w, h, match_name, confidence=None):
         self.current_mat = mat
         self.current_w = w
         self.current_h = h
+        self.current_match_name = match_name or ""
+        self.current_confidence = confidence
         if mat is not None and getattr(mat, "size", 0) > 0:
             pixmap = cv_to_pixmap(mat)
             self.image.setImage(
@@ -169,16 +187,42 @@ class SlotCard(CardWidget):
             self.image.setImage(empty_pixmap)
 
         if match_name:
-            self.status.setText(self.tr_match_success.format(match_name))
-            self.btn_act.hide()
+            self.status.setText(
+                self._status_text(self.tr_match_success.format(match_name), confidence)
+            )
+            self.btn_act.setEnabled(True)
+            self.btn_act.setText(self.tr_add_match_feature_btn)
+            self.btn_act.show()
         elif mat is not None:
-            self.status.setText(self.tr_unrecognized)
+            self.status.setText(self._status_text(self.tr_unrecognized, confidence))
+            self.btn_act.setEnabled(True)
+            self.btn_act.setText(self.tr_action_btn)
             self.btn_act.show()
         else:
             self.status.setText(self.tr_no_image)
+            self.btn_act.setEnabled(True)
             self.btn_act.hide()
 
     def on_action(self):
+        if self.current_match_name and self.current_mat is not None:
+            self.manager.add_feature_to_character(
+                self.current_match_name,
+                self.current_mat,
+                width=self.current_w,
+                height=self.current_h,
+            )
+            self.update_result(
+                self.current_mat,
+                self.current_w,
+                self.current_h,
+                self.current_match_name,
+                self.current_confidence,
+            )
+            self.btn_act.setText(self.tr_feature_added_btn)
+            self.btn_act.setEnabled(False)
+            char_manager_signals.refresh_tab.emit()
+            return
+
         dialog = NewCharDialog(self.current_mat, self.manager, self.window())
         if dialog.exec():
             char_name, combo_ref = dialog.get_data()
@@ -314,7 +358,7 @@ class TeamManagerTab(CustomTab):
         self.tr_rematch_confirm_desc = og.app.tr("重新关联将清空当前匹配到的4位角色归属，你可以重新修正角色归属。")
         self.tr_rematch_disabled_tooltip = og.app.tr("请先扫描队伍后再重新关联角色")
         self.tr_no_feature = og.app.tr("未获取到特征")
-        self.tr_scan_prompt = og.app.tr("点击上方按钮扫描...")
+        self.tr_scan_task_missing = og.app.tr("自动战斗任务不可用")
         self.tr_name_tab = TEAM_MANAGEMENT
         self.tr_scan_desc = og.app.tr("不扫描也可自动战斗，将使用通用脚本")
         self.tr_fixed_team_title = og.app.tr("固定队伍")
@@ -363,7 +407,6 @@ class TeamManagerTab(CustomTab):
         self.manager = manager or CustomCharManager()
         self.icon = FluentIcon.CAMERA
         self.last_scan_results = []
-        self._capture_started = False
         self.logger.info("Init TeamManagerTab")
 
         self.vbox = QVBoxLayout(self)
@@ -408,27 +451,6 @@ class TeamManagerTab(CustomTab):
         self.scan_layout.addWidget(self.scan_desc)
 
         self.vbox.addWidget(self.scan_card)
-
-        self.strategy_card = CardWidget(self)
-        self.strategy_layout = QVBoxLayout(self.strategy_card)
-        self.strategy_layout.setContentsMargins(16, 16, 16, 16)
-        self.strategy_layout.setSpacing(12)
-
-        self.strategy_header = QHBoxLayout()
-        self.strategy_header_text = QVBoxLayout()
-        self.strategy_title = SubtitleLabel(og.app.tr("全局连招策略"))
-        self.strategy_desc = BodyLabel(og.app.tr("全局连招策略：覆盖角色独立配置，无需固定角色位置，不匹配时回退通用脚本"))
-        self.strategy_header_text.addWidget(self.strategy_title)
-        self.strategy_header_text.addWidget(self.strategy_desc)
-        self.strategy_header.addLayout(self.strategy_header_text, 1)
-
-        self.strategy_combo = ComboBox(self)
-        self.strategy_combo.setMinimumWidth(200)
-        self.strategy_combo.addItem(og.app.tr("默认自由战斗"), userData="NONE")
-        self.strategy_combo.addItem(og.app.tr("浔-零-九原-娜娜莉 浔创生链式轴"), userData="HOTORI_CREATION_CHAIN")
-        self.strategy_header.addWidget(self.strategy_combo)
-        self.strategy_layout.addLayout(self.strategy_header)
-        self.vbox.addWidget(self.strategy_card)
 
         self.fixed_team_card = CardWidget(self)
         self.fixed_team_layout = QVBoxLayout(self.fixed_team_card)
@@ -488,9 +510,8 @@ class TeamManagerTab(CustomTab):
 
         self.vbox.addStretch(1)
 
-        scanner_signals.scan_done.connect(self.on_scan_done)
+        team_manager_signals.scan_done.connect(self.on_scan_done)
         char_manager_signals.refresh_tab.connect(self.reload_fixed_team_options)
-        self.strategy_combo.currentIndexChanged.connect(self.on_strategy_changed)
         self.refresh_fixed_team_state()
 
     @property
@@ -552,11 +573,6 @@ class TeamManagerTab(CustomTab):
         for i, card in enumerate(self.fixed_team_slots):
             slot = slots[i] if i < len(slots) else {}
             card.set_data(slot.get("char_name", ""), slot.get("combo_ref", ""))
-        
-        saved_strategy = fixed_team.get("team_strategy", "NONE")
-        idx = self.strategy_combo.findData(saved_strategy)
-        if idx >= 0:
-            self.strategy_combo.setCurrentIndex(idx)
 
         filled_count = sum(1 for slot in slots if slot.get("char_name"))
         if fixed_team.get("enabled") and filled_count:
@@ -572,31 +588,52 @@ class TeamManagerTab(CustomTab):
             self.save_fixed_team_btn.setText(self.tr_save_fixed_team)
             self.disable_fixed_team_btn.setEnabled(False)
 
-    def on_strategy_changed(self, index):
-        strategy_data = self.strategy_combo.itemData(index)
-        self.manager.set_team_strategy(strategy_data)
-        if strategy_data != "NONE":
-            self._show_bar(og.app.tr("策略已切换"), og.app.tr(f"已启用全局连招策略：{self.strategy_combo.currentText()}"))
-        else:
-            self._show_bar(og.app.tr("策略已切换"), og.app.tr("已关闭全局连招策略"))    
-
     def on_scan_clicked(self):
+        og.app.start_controller.handler.post(self.scan_team)
+
+    def _ensure_scan_capture(self):
+        try:
+            executor = og.executor
+            if getattr(executor, "thread", None) is None or getattr(executor, "paused", False):
+                if not og.app.start_controller.do_start():
+                    return og.app.tr("启动失败")
+                return ""
+
+            og.device_manager.do_refresh(True)
+            return og.app.start_controller.check_device_error() or ""
+        except Exception as e:
+            return str(e).strip() or e.__class__.__name__
+
+    def scan_team(self):
         self.scan_btn.setEnabled(False)
         self.scan_btn.setText(self.tr_scanning)
         self.rematch_btn.setEnabled(False)
         self.rematch_btn.setToolTip(self.tr_rematch_disabled_tooltip)
         for card in self.slots:
+            # card.status.setText(self.tr_analyzing)
             card.btn_act.hide()
 
-        if not self._capture_started:
-            self._capture_started = True
-            threading.Thread(target=og.app.start_controller.do_start, daemon=True).start()
+        error_msg = self._ensure_scan_capture()
+        if error_msg:
+            team_manager_signals.scan_done.emit([], error_msg)
+            return
 
-        def _scan_worker():
-            time.sleep(0.5)
-            self.get_task(AutoCombatTask).scan_team()
+        task = self.get_task(AutoCombatTask)
+        if not task:
+            team_manager_signals.scan_done.emit([], self.tr_scan_task_missing)
+            return
 
-        threading.Thread(target=_scan_worker, daemon=True).start()
+        results = []
+        error_msg = ""
+        try:
+            results = TeamScanner(self.manager).scan(task)
+        except TeamScanError as e:
+            error_msg = og.app.tr(str(e))
+        except Exception as e:
+            error_msg = str(e).strip() or e.__class__.__name__
+            self.logger.error(f"扫描失败: {error_msg}\n{traceback.format_exc()}")
+        finally:
+            team_manager_signals.scan_done.emit(results, error_msg)
 
     def on_fill_from_scan(self):
         if not self.last_scan_results:
@@ -693,8 +730,9 @@ class TeamManagerTab(CustomTab):
             w = res.get("width", 0)
             h = res.get("height", 0)
             match_name = res.get("match")
+            confidence = res.get("confidence")
             if 0 <= idx < 4:
-                self.slots[idx].update_result(mat, w, h, match_name)
+                self.slots[idx].update_result(mat, w, h, match_name, confidence)
                 updated_indices.add(idx)
 
         for i in range(4):
